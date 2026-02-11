@@ -4,7 +4,7 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>IA Week — Contrôle Qualité Convoyeur</title>
-    <link rel="stylesheet" href="/style.css" />
+    <link rel="stylesheet" href="/style.css?v=2" />
     <!-- GSAP for animations -->
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 </head>
@@ -27,7 +27,7 @@
                 <span class="status-dot offline"></span>
                 <span class="status-text">Connexion...</span>
             </div>
-            <span class="user-badge">👤 demo_client</span>
+            <span class="user-badge">demo_client</span>
             <button class="btn-logout" onclick="logout()">Déconnexion</button>
         </div>
     </header>
@@ -38,7 +38,7 @@
         <!-- LEFT PANEL — Upload & Queue -->
         <aside class="panel panel-left">
             <div class="panel-header">
-                <h2>📥 Chargement des pièces</h2>
+                <h2>Chargement des pièces</h2>
             </div>
 
             <div class="upload-zone" id="uploadZone">
@@ -80,7 +80,7 @@
             <div class="conveyor-container">
                 <!-- OK bin (left) -->
                 <div class="bin bin-ok" id="binOk">
-                    <div class="bin-label">✅ CONFORME</div>
+                    <div class="bin-label">CONFORME</div>
                     <div class="bin-body">
                         <div class="bin-count" id="binOkCount">0</div>
                     </div>
@@ -109,7 +109,7 @@
                             </div>
                             <div class="scan-line" id="scanLine"></div>
                         </div>
-                        <div class="camera-label">🔍 ANALYSE IA</div>
+                        <div class="camera-label">ANALYSE IA</div>
                         <div class="camera-status" id="cameraStatus">En attente</div>
                     </div>
 
@@ -125,7 +125,7 @@
 
                 <!-- Defect bin (right) -->
                 <div class="bin bin-def" id="binDef">
-                    <div class="bin-label">❌ DÉFAUT</div>
+                    <div class="bin-label">DÉFAUT</div>
                     <div class="bin-body">
                         <div class="bin-count" id="binDefCount">0</div>
                     </div>
@@ -135,7 +135,7 @@
             <!-- Result display -->
             <div class="result-display" id="resultDisplay">
                 <div class="result-content" id="resultContent">
-                    <span class="result-icon">⏳</span>
+                    <span class="result-icon"></span>
                     <span class="result-text">Chargez des images pour démarrer le convoyeur</span>
                 </div>
             </div>
@@ -144,7 +144,7 @@
         <!-- RIGHT PANEL — History / Log -->
         <aside class="panel panel-right">
             <div class="panel-header">
-                <h2>📋 Historique</h2>
+                <h2>Historique</h2>
                 <button class="btn-clear" onclick="clearHistory()">Effacer</button>
             </div>
             <div class="history-list" id="historyList">
@@ -153,6 +153,6 @@
         </aside>
     </main>
 
-    <script src="/conveyor.js"></script>
+    <script src="/conveyor.js?v=2"></script>
 </body>
 </html>

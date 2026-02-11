@@ -25,11 +25,13 @@ from feature_extractor import FeatureExtractor
 MODEL_DIR = Path("/models")
 SVM_MODEL_PATH = MODEL_DIR / "svm_model.joblib"
 SCALER_PATH = MODEL_DIR / "scaler.joblib"
+RESNET_WEIGHTS_PATH = MODEL_DIR / "resnet50_extractor.pth"
 IMG_SIZE = 224
 DEVICE = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
 # Classes — binary classification matching training order
-CLASSES = ["def", "ok"]  # index 0 = defective, index 1 = ok
+# Training: ok_front → label 0, def_front → label 1
+CLASSES = ["ok", "def"]  # index 0 = ok, index 1 = defective
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger("backend")
@@ -64,12 +66,20 @@ async def lifespan(app: FastAPI):
     logger.info("LOADING MODELS")
     logger.info("=" * 60)
 
-    # 1. Feature extractor (ResNet50)
+    # 1. Feature extractor (ResNet50) — load exact weights from training
     t0 = time.time()
-    extractor = FeatureExtractor(model_name="resnet50")
+    if not RESNET_WEIGHTS_PATH.exists():
+        raise FileNotFoundError(
+            f"ResNet50 weights not found: {RESNET_WEIGHTS_PATH}. "
+            "Please save them from the training notebook."
+        )
+    extractor = FeatureExtractor(
+        model_name="resnet50",
+        weights_path=str(RESNET_WEIGHTS_PATH),
+    )
     extractor = extractor.to(DEVICE)
     extractor.eval()
-    logger.info(f"  ResNet50 loaded on {DEVICE} in {time.time() - t0:.2f}s")
+    logger.info(f"  ResNet50 loaded from {RESNET_WEIGHTS_PATH} on {DEVICE} in {time.time() - t0:.2f}s")
 
     # 2. SVM model
     if not SVM_MODEL_PATH.exists():

@@ -1,6 +1,4 @@
-torch
-torchvision
-scikit-learn>=1.6
+scikit-learn==1.6.1
 joblib
 numpy<2
 Pillow

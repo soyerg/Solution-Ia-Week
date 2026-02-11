@@ -14,11 +14,12 @@ class FeatureExtractor(nn.Module):
     Output: 2048-dimensional feature vector per image.
     """
 
-    def __init__(self, model_name: str = "resnet50"):
+    def __init__(self, model_name: str = "resnet50", weights_path: str | None = None):
         super().__init__()
 
         if model_name == "resnet50":
-            base_model = models.resnet50(weights=models.ResNet50_Weights.DEFAULT)
+            # Build architecture without pretrained weights first
+            base_model = models.resnet50(weights=None)
             self.features = nn.Sequential(*list(base_model.children())[:-1])
             self.output_dim = 2048
 
@@ -41,6 +42,11 @@ class FeatureExtractor(nn.Module):
             self.output_dim = 1280
         else:
             raise ValueError(f"Unknown model: {model_name}")
+
+        # Load saved weights (from training environment) if provided
+        if weights_path is not None:
+            state_dict = torch.load(weights_path, map_location="cpu", weights_only=True)
+            self.load_state_dict(state_dict)
 
         # Freeze all weights — inference only
         for param in self.parameters():

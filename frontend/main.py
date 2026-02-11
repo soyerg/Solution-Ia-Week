@@ -7,16 +7,37 @@ import httpx
 from fastapi import FastAPI, Request, UploadFile, File
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
+from starlette.middleware.base import BaseHTTPMiddleware
+from starlette.responses import Response
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 BACKEND_URL = "http://backend:8000"
 
+
+# ---------------------------------------------------------------------------
+# Middleware to disable caching for static files (dev mode)
+# ---------------------------------------------------------------------------
+class NoCacheMiddleware(BaseHTTPMiddleware):
+    async def dispatch(self, request: Request, call_next):
+        response: Response = await call_next(request)
+        if request.url.path.endswith((".js", ".css", ".html")) or request.url.path == "/":
+            response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate, max-age=0"
+            response.headers["Pragma"] = "no-cache"
+            response.headers["Expires"] = "0"
+            # Remove headers that allow 304 responses
+            if "etag" in response.headers:
+                del response.headers["etag"]
+            if "last-modified" in response.headers:
+                del response.headers["last-modified"]
+        return response
+
 # ---------------------------------------------------------------------------
 # App
 # ---------------------------------------------------------------------------
 app = FastAPI(title="Casting Classifier — Frontend")
+app.add_middleware(NoCacheMiddleware)
 
 
 # ---------------------------------------------------------------------------

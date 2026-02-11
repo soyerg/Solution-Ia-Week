@@ -188,6 +188,7 @@ function animatePieceCycle(item) {
 
             // Store result on item
             item.result = result;
+            const isOk = result.label === "ok";
 
             // Update camera UI
             scanLine.classList.remove("active");
@@ -196,7 +197,6 @@ function animatePieceCycle(item) {
             cameraStatus.classList.remove("classifying");
 
             // Update result display
-            const isOk = result.label === "ok";
             updateResult(
                 isOk ? "ok" : "def",
                 isOk ? "✅" : "❌",
@@ -214,21 +214,21 @@ function animatePieceCycle(item) {
             // Add to history
             addHistoryItem(item);
 
-            // Resume timeline after a brief display pause
-            setTimeout(() => tl.resume(), 800);
-        });
+            // Wait a moment to show the result, then sort
+            await new Promise(r => setTimeout(r, 800));
 
-        // === Phase 4: Belt resumes, piece gets sorted ===
-        tl.call(() => {
+            // === SORT — belt resumes, piece gets sorted ===
             beltChevrons.classList.remove("paused");
             cameraStatus.textContent = "En attente";
-        });
 
-        // Decide sort direction based on result
-        tl.call(() => {
-            const isOk = item.result && item.result.label === "ok";
-            const exitX = isOk ? -200 : 200;  // left = OK, right = Defect
-            const exitY = centerY + 40;
+            // Calculate direction toward the correct bin
+            const pieceRect = piece.getBoundingClientRect();
+            const binOkRect = binOk.getBoundingClientRect();
+            const binDefRect = binDef.getBoundingClientRect();
+
+            const targetX = isOk
+                ? binOkRect.left + binOkRect.width / 2 - pieceRect.left - pieceRect.width / 2
+                : binDefRect.left + binDefRect.width / 2 - pieceRect.left - pieceRect.width / 2;
 
             // Animate sorting arm
             gsap.to("#armPusher", {
@@ -238,31 +238,38 @@ function animatePieceCycle(item) {
                 repeat: 1,
             });
 
-            // Animate piece to bin
-            gsap.to(piece, {
-                x: exitX,
-                top: exitY + 20,
-                opacity: 0,
-                duration: 0.6,
-                ease: "power2.in",
-                onComplete: () => {
-                    // Flash bin
-                    const bin = isOk ? binOk : binDef;
-                    bin.classList.add(isOk ? "flash-ok" : "flash-def");
-                    setTimeout(() => bin.classList.remove("flash-ok", "flash-def"), 600);
+            // Animate piece to the correct bin
+            await new Promise(resolveAnim => {
+                gsap.to(piece, {
+                    x: targetX,
+                    y: 40,
+                    opacity: 0,
+                    duration: 0.6,
+                    ease: "power2.in",
+                    onComplete: () => {
+                        // Flash bin
+                        const bin = isOk ? binOk : binDef;
+                        bin.classList.add(isOk ? "flash-ok" : "flash-def");
+                        setTimeout(() => bin.classList.remove("flash-ok", "flash-def"), 600);
 
-                    // Update bin count
-                    if (isOk) {
-                        binOkCount.textContent = state.stats.ok;
-                    } else {
-                        binDefCount.textContent = state.stats.def;
-                    }
-                },
+                        // Update bin count
+                        if (isOk) {
+                            binOkCount.textContent = state.stats.ok;
+                        } else {
+                            binDefCount.textContent = state.stats.def;
+                        }
+                        resolveAnim();
+                    },
+                });
             });
+
+            // Small delay then let timeline finish
+            await new Promise(r => setTimeout(r, 200));
+            tl.resume();
         });
 
         // Wait for sort animation to complete
-        tl.to({}, { duration: 1 });
+        tl.to({}, { duration: 0.1 });
     });
 }
 
