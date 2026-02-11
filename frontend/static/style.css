@@ -105,10 +105,23 @@ body {
     color: var(--red);
 }
 
-/* --- Main Layout (3 columns) --- */
-.main-layout {
+/* --- App Shell (SPA container: view + sidebar) --- */
+.app-shell {
     display: flex;
     flex: 1;
+    overflow: hidden;
+}
+
+/* View content — the active main block */
+.view-content {
+    flex: 1;
+    min-width: 0;
+}
+
+/* --- Main Layout (conveyor: left panel + center) --- */
+.main-layout {
+    display: flex;
+    height: 100%;
     overflow: hidden;
 }
 
@@ -669,6 +682,60 @@ body {
     text-align: right;
 }
 
+/* History sidebar — action button */
+.history-actions {
+    flex-shrink: 0;
+}
+.history-sim-btn {
+    background: rgba(59,130,246,.1);
+    border: 1px solid rgba(59,130,246,.25);
+    color: var(--blue);
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s;
+}
+.history-sim-btn:hover {
+    background: rgba(59,130,246,.25);
+    border-color: var(--blue);
+    transform: scale(1.1);
+}
+.history-item {
+    cursor: pointer;
+    transition: all .2s;
+}
+.history-item:hover {
+    border-color: var(--blue);
+    background: rgba(59,130,246,.06);
+}
+
+/* Search similar button (similarity view) */
+.btn-search-similar {
+    width: 100%;
+    padding: 14px 20px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #fff;
+    background: linear-gradient(135deg, var(--blue), #6366f1);
+    border: none;
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all .2s;
+    letter-spacing: .3px;
+}
+.btn-search-similar:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 16px rgba(59,130,246,.4);
+}
+.btn-search-similar:active {
+    transform: translateY(0);
+}
+
 /* --- Scrollbar --- */
 ::-webkit-scrollbar { width: 4px; }
 ::-webkit-scrollbar-track { background: transparent; }
@@ -697,6 +764,13 @@ body {
     border-color: var(--blue);
     color: #93c5fd;
 }
+.btn-nav.active {
+    background: rgba(59,130,246,.25);
+    border-color: var(--blue);
+    color: #93c5fd;
+    font-weight: 600;
+    box-shadow: 0 0 8px rgba(59,130,246,.2);
+}
 
 /* =================================================================
    SIMILARITY PAGE — Layout & Components
@@ -705,7 +779,7 @@ body {
 /* --- Main 2-column layout --- */
 .sim-layout {
     display: flex;
-    flex: 1;
+    height: 100%;
     overflow: hidden;
     gap: 0;
 }

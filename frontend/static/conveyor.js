@@ -1,346 +1,293 @@
 /* =================================================================
    CONVEYOR.JS — GSAP-powered conveyor belt animation + API calls
+   SPA-compatible: exposes window.Conveyor, uses AppHistory
    ================================================================= */
 
-// ---------------------------------------------------------------------------
-// State
-// ---------------------------------------------------------------------------
-const state = {
-    queue: [],           // { file, objectUrl, name, status: 'waiting'|'processing'|'done' }
-    isRunning: false,
-    stats: { total: 0, ok: 0, def: 0 },
-};
+const Conveyor = (() => {
+    // -----------------------------------------------------------------------
+    // State
+    // -----------------------------------------------------------------------
+    const state = {
+        queue: [],           // { file, objectUrl, name, status: 'waiting'|'processing'|'done' }
+        isRunning: false,
+        paused: false,       // true when similarity view is active
+        stats: { total: 0, ok: 0, def: 0 },
+        activeTl: null,      // current GSAP timeline (for pause/resume)
+    };
 
-// ---------------------------------------------------------------------------
-// DOM refs
-// ---------------------------------------------------------------------------
-const $ = (sel) => document.querySelector(sel);
-const uploadZone    = $("#uploadZone");
-const fileInput     = $("#fileInput");
-const queueList     = $("#queueList");
-const queueCount    = $("#queueCount");
-const beltSurface   = $("#beltSurface");
-const beltChevrons  = $("#beltChevrons");
-const cameraLens    = $("#cameraLens");
-const cameraStatus  = $("#cameraStatus");
-const scanLine      = $("#scanLine");
-const resultDisplay = $("#resultDisplay");
-const resultContent = $("#resultContent");
-const historyList   = $("#historyList");
-const binOk         = $("#binOk");
-const binDef        = $("#binDef");
-const binOkCount    = $("#binOkCount");
-const binDefCount   = $("#binDefCount");
-const statTotal     = $("#statTotal");
-const statOk        = $("#statOk");
-const statDef       = $("#statDef");
-const statRate      = $("#statRate");
+    // -----------------------------------------------------------------------
+    // DOM refs (scoped to #viewConveyor)
+    // -----------------------------------------------------------------------
+    const uploadZone    = document.getElementById("convUploadZone");
+    const fileInput     = document.getElementById("convFileInput");
+    const queueList     = document.getElementById("queueList");
+    const queueCount    = document.getElementById("queueCount");
+    const beltSurface   = document.getElementById("beltSurface");
+    const beltChevrons  = document.getElementById("beltChevrons");
+    const cameraLens    = document.getElementById("cameraLens");
+    const cameraStatus  = document.getElementById("cameraStatus");
+    const scanLine      = document.getElementById("scanLine");
+    const resultDisplay = document.getElementById("resultDisplay");
+    const resultContent = document.getElementById("resultContent");
+    const binOk         = document.getElementById("binOk");
+    const binDef        = document.getElementById("binDef");
+    const binOkCount    = document.getElementById("binOkCount");
+    const binDefCount   = document.getElementById("binDefCount");
+    const statTotal     = document.getElementById("statTotal");
+    const statOk        = document.getElementById("statOk");
+    const statDef       = document.getElementById("statDef");
+    const statRate      = document.getElementById("statRate");
 
-// ---------------------------------------------------------------------------
-// Backend health check
-// ---------------------------------------------------------------------------
-async function checkBackend() {
-    const dot  = $(".status-dot");
-    const text = $(".status-text");
-    try {
-        const res = await fetch("/api/health", { signal: AbortSignal.timeout(5000) });
-        if (res.ok) {
-            dot.classList.remove("offline");
-            text.textContent = "Backend connecté";
-            return true;
+    // -----------------------------------------------------------------------
+    // Upload handling
+    // -----------------------------------------------------------------------
+    uploadZone.addEventListener("click", () => fileInput.click());
+    fileInput.addEventListener("change", (e) => {
+        addFiles(e.target.files);
+        fileInput.value = "";     // allow re-selecting same file
+    });
+
+    uploadZone.addEventListener("dragover", (e) => {
+        e.preventDefault();
+        uploadZone.classList.add("dragover");
+    });
+    uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
+    uploadZone.addEventListener("drop", (e) => {
+        e.preventDefault();
+        uploadZone.classList.remove("dragover");
+        addFiles(e.dataTransfer.files);
+    });
+
+    function addFiles(files) {
+        for (const file of files) {
+            if (!file.type.startsWith("image/")) continue;
+            state.queue.push({
+                file,
+                objectUrl: URL.createObjectURL(file),
+                name: file.name,
+                status: "waiting",
+            });
         }
-    } catch (e) { /* offline */ }
-    dot.classList.add("offline");
-    text.textContent = "Backend hors ligne";
-    return false;
-}
-checkBackend();
-setInterval(checkBackend, 15000);
-
-// ---------------------------------------------------------------------------
-// Upload handling
-// ---------------------------------------------------------------------------
-uploadZone.addEventListener("click", () => fileInput.click());
-fileInput.addEventListener("change", (e) => addFiles(e.target.files));
-
-// Drag & Drop
-uploadZone.addEventListener("dragover", (e) => {
-    e.preventDefault();
-    uploadZone.classList.add("dragover");
-});
-uploadZone.addEventListener("dragleave", () => uploadZone.classList.remove("dragover"));
-uploadZone.addEventListener("drop", (e) => {
-    e.preventDefault();
-    uploadZone.classList.remove("dragover");
-    addFiles(e.dataTransfer.files);
-});
-
-function addFiles(files) {
-    for (const file of files) {
-        if (!file.type.startsWith("image/")) continue;
-        state.queue.push({
-            file,
-            objectUrl: URL.createObjectURL(file),
-            name: file.name,
-            status: "waiting",
-        });
-    }
-    renderQueue();
-    if (!state.isRunning) runConveyor();
-}
-
-// ---------------------------------------------------------------------------
-// Queue rendering
-// ---------------------------------------------------------------------------
-function renderQueue() {
-    queueCount.textContent = state.queue.filter(q => q.status === "waiting").length;
-    queueList.innerHTML = "";
-    for (const item of state.queue) {
-        const el = document.createElement("div");
-        el.className = `queue-item ${item.status === "processing" ? "active" : ""} ${item.status === "done" ? "done" : ""}`;
-        el.innerHTML = `
-            <img class="queue-item-thumb" src="${item.objectUrl}" alt="" />
-            <span class="queue-item-name">${item.name}</span>
-            <span class="queue-item-status">${
-                item.status === "waiting"    ? "⏳" :
-                item.status === "processing" ? "🔄" : "✅"
-            }</span>
-        `;
-        queueList.appendChild(el);
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Main Conveyor Loop — processes items sequentially
-// ---------------------------------------------------------------------------
-async function runConveyor() {
-    state.isRunning = true;
-
-    while (true) {
-        // Find next waiting item
-        const item = state.queue.find(q => q.status === "waiting");
-        if (!item) break;
-
-        item.status = "processing";
         renderQueue();
-
-        // Animate one full cycle for this piece
-        await animatePieceCycle(item);
-
-        item.status = "done";
-        renderQueue();
+        if (!state.isRunning) runConveyor();
     }
 
-    state.isRunning = false;
-}
+    // -----------------------------------------------------------------------
+    // Queue rendering
+    // -----------------------------------------------------------------------
+    function renderQueue() {
+        queueCount.textContent = state.queue.filter(q => q.status === "waiting").length;
+        queueList.innerHTML = "";
+        for (const item of state.queue) {
+            const el = document.createElement("div");
+            el.className = `queue-item ${item.status === "processing" ? "active" : ""} ${item.status === "done" ? "done" : ""}`;
+            el.innerHTML = `
+                <img class="queue-item-thumb" src="${item.objectUrl}" alt="" />
+                <span class="queue-item-name">${item.name}</span>
+                <span class="queue-item-status">${
+                    item.status === "waiting"    ? "⏳" :
+                    item.status === "processing" ? "🔄" : "✅"
+                }</span>
+            `;
+            queueList.appendChild(el);
+        }
+    }
 
-// ---------------------------------------------------------------------------
-// Animate one piece through the full conveyor cycle
-// ---------------------------------------------------------------------------
-function animatePieceCycle(item) {
-    return new Promise((resolve) => {
-        const beltRect = beltSurface.getBoundingClientRect();
-        const beltH = beltSurface.offsetHeight;
-        const centerY = beltH / 2 - 40; // center piece on camera
+    // -----------------------------------------------------------------------
+    // Conveyor Loop — processes items sequentially
+    // -----------------------------------------------------------------------
+    async function runConveyor() {
+        state.isRunning = true;
 
-        // Create piece element
-        const piece = document.createElement("div");
-        piece.className = "piece";
-        piece.innerHTML = `<img class="piece-img" src="${item.objectUrl}" alt="${item.name}" />`;
-        beltSurface.appendChild(piece);
-
-        // GSAP Master timeline
-        const tl = gsap.timeline({
-            onComplete: () => {
-                piece.remove();
-                resolve();
-            },
-        });
-
-        // === Phase 1: Belt moves, piece enters from top ===
-        tl.to(piece, {
-            top: centerY,
-            duration: 1.5,
-            ease: "power2.out",
-        });
-
-        // === Phase 2: Belt stops, camera activates ===
-        tl.call(() => {
-            beltChevrons.classList.add("paused");
-            cameraLens.classList.add("scanning");
-            cameraStatus.textContent = "Classification...";
-            cameraStatus.classList.add("classifying");
-            scanLine.classList.add("active");
-            updateResult("classifying", "🔄", "Analyse en cours...");
-        });
-
-        // Small pause for visual effect before API call
-        tl.to({}, { duration: 0.3 });
-
-        // === Phase 3: API call (timeline pauses here) ===
-        tl.addPause("api-call", async () => {
-            let result;
-            try {
-                result = await classifyImage(item.file);
-            } catch (e) {
-                result = { label: "def", label_fr: "Erreur ❌", confidence: 0, inference_time_ms: 0 };
+        while (true) {
+            // Wait while paused
+            while (state.paused) {
+                await new Promise(r => setTimeout(r, 200));
             }
 
-            // Store result on item
-            item.result = result;
-            const isOk = result.label === "ok";
+            const item = state.queue.find(q => q.status === "waiting");
+            if (!item) break;
 
-            // Update camera UI
-            scanLine.classList.remove("active");
-            cameraLens.classList.remove("scanning");
-            cameraStatus.textContent = result.label_fr;
-            cameraStatus.classList.remove("classifying");
+            item.status = "processing";
+            renderQueue();
 
-            // Update result display
-            updateResult(
-                isOk ? "ok" : "def",
-                isOk ? "✅" : "❌",
-                `${result.label_fr}  —  Confiance: ${(result.confidence * 100).toFixed(1)}%  —  ${result.inference_time_ms}ms`
-            );
+            await animatePieceCycle(item);
 
-            // Highlight piece
-            piece.classList.add(isOk ? "result-ok" : "result-def");
+            item.status = "done";
+            renderQueue();
+        }
 
-            // Update stats
-            state.stats.total++;
-            if (isOk) state.stats.ok++; else state.stats.def++;
-            updateStats();
-
-            // Add to history
-            addHistoryItem(item);
-
-            // Wait a moment to show the result, then sort
-            await new Promise(r => setTimeout(r, 800));
-
-            // === SORT — belt resumes, piece gets sorted ===
-            beltChevrons.classList.remove("paused");
-            cameraStatus.textContent = "En attente";
-
-            // Calculate direction toward the correct bin
-            const pieceRect = piece.getBoundingClientRect();
-            const binOkRect = binOk.getBoundingClientRect();
-            const binDefRect = binDef.getBoundingClientRect();
-
-            const targetX = isOk
-                ? binOkRect.left + binOkRect.width / 2 - pieceRect.left - pieceRect.width / 2
-                : binDefRect.left + binDefRect.width / 2 - pieceRect.left - pieceRect.width / 2;
-
-            // Animate sorting arm
-            gsap.to("#armPusher", {
-                x: isOk ? -30 : 30,
-                duration: 0.2,
-                yoyo: true,
-                repeat: 1,
-            });
-
-            // Animate piece to the correct bin
-            await new Promise(resolveAnim => {
-                gsap.to(piece, {
-                    x: targetX,
-                    y: 40,
-                    opacity: 0,
-                    duration: 0.6,
-                    ease: "power2.in",
-                    onComplete: () => {
-                        // Flash bin
-                        const bin = isOk ? binOk : binDef;
-                        bin.classList.add(isOk ? "flash-ok" : "flash-def");
-                        setTimeout(() => bin.classList.remove("flash-ok", "flash-def"), 600);
-
-                        // Update bin count
-                        if (isOk) {
-                            binOkCount.textContent = state.stats.ok;
-                        } else {
-                            binDefCount.textContent = state.stats.def;
-                        }
-                        resolveAnim();
-                    },
-                });
-            });
-
-            // Small delay then let timeline finish
-            await new Promise(r => setTimeout(r, 200));
-            tl.resume();
-        });
-
-        // Wait for sort animation to complete
-        tl.to({}, { duration: 0.1 });
-    });
-}
-
-// ---------------------------------------------------------------------------
-// API call
-// ---------------------------------------------------------------------------
-async function classifyImage(file) {
-    const formData = new FormData();
-    formData.append("file", file);
-
-    const response = await fetch("/api/classify", {
-        method: "POST",
-        body: formData,
-    });
-
-    if (!response.ok) {
-        throw new Error(`HTTP ${response.status}`);
+        state.isRunning = false;
     }
 
-    return await response.json();
-}
+    // -----------------------------------------------------------------------
+    // Animate one piece through the full conveyor cycle
+    // -----------------------------------------------------------------------
+    function animatePieceCycle(item) {
+        return new Promise((resolve) => {
+            const beltH = beltSurface.offsetHeight;
+            const centerY = beltH / 2 - 40;
 
-// ---------------------------------------------------------------------------
-// UI Helpers
-// ---------------------------------------------------------------------------
-function updateResult(type, icon, text) {
-    resultDisplay.className = `result-display ${type === "classifying" ? "" : type}`;
-    resultContent.innerHTML = `
-        <span class="result-icon">${icon}</span>
-        <span class="result-text">${text}</span>
-    `;
-}
+            const piece = document.createElement("div");
+            piece.className = "piece";
+            piece.innerHTML = `<img class="piece-img" src="${item.objectUrl}" alt="${item.name}" />`;
+            beltSurface.appendChild(piece);
 
-function updateStats() {
-    statTotal.textContent = state.stats.total;
-    statOk.textContent = state.stats.ok;
-    statDef.textContent = state.stats.def;
-    statRate.textContent = state.stats.total > 0
-        ? `${((state.stats.ok / state.stats.total) * 100).toFixed(1)}%`
-        : "—";
-}
+            const tl = gsap.timeline({
+                onComplete: () => {
+                    piece.remove();
+                    state.activeTl = null;
+                    resolve();
+                },
+            });
 
-function addHistoryItem(item) {
-    // Remove empty message
-    const empty = historyList.querySelector(".history-empty");
-    if (empty) empty.remove();
+            state.activeTl = tl;
 
-    const isOk = item.result.label === "ok";
-    const el = document.createElement("div");
-    el.className = "history-item";
-    el.innerHTML = `
-        <img class="history-thumb" src="${item.objectUrl}" alt="" />
-        <div class="history-info">
-            <div class="history-name">${item.name}</div>
-            <div class="history-result ${isOk ? "ok" : "def"}">${item.result.label_fr}</div>
-        </div>
-        <div class="history-time">${item.result.inference_time_ms}ms</div>
-    `;
+            // Phase 1: piece enters
+            tl.to(piece, { top: centerY, duration: 1.5, ease: "power2.out" });
 
-    // Insert at top
-    historyList.insertBefore(el, historyList.firstChild);
-}
+            // Phase 2: camera activates
+            tl.call(() => {
+                beltChevrons.classList.add("paused");
+                cameraLens.classList.add("scanning");
+                cameraStatus.textContent = "Classification...";
+                cameraStatus.classList.add("classifying");
+                scanLine.classList.add("active");
+                updateResult("classifying", "🔄", "Analyse en cours...");
+            });
 
-// ---------------------------------------------------------------------------
-// Global actions
-// ---------------------------------------------------------------------------
-function clearHistory() {
-    historyList.innerHTML = '<div class="history-empty">Aucune pièce analysée</div>';
-}
+            tl.to({}, { duration: 0.3 });
 
-function logout() {
-    sessionStorage.clear();
-    window.location.href = "/login.html";
-}
+            // Phase 3: API call
+            tl.addPause("api-call", async () => {
+                let result;
+                try {
+                    result = await classifyImage(item.file);
+                } catch (e) {
+                    result = { label: "def", label_fr: "Erreur ❌", confidence: 0, inference_time_ms: 0 };
+                }
+
+                item.result = result;
+                const isOk = result.label === "ok";
+
+                scanLine.classList.remove("active");
+                cameraLens.classList.remove("scanning");
+                cameraStatus.textContent = result.label_fr;
+                cameraStatus.classList.remove("classifying");
+
+                updateResult(
+                    isOk ? "ok" : "def",
+                    isOk ? "✅" : "❌",
+                    `${result.label_fr}  —  Confiance: ${(result.confidence * 100).toFixed(1)}%  —  ${result.inference_time_ms}ms`
+                );
+
+                piece.classList.add(isOk ? "result-ok" : "result-def");
+
+                state.stats.total++;
+                if (isOk) state.stats.ok++; else state.stats.def++;
+                updateStats();
+
+                // *** Add to shared history ***
+                AppHistory.add(item.file, item.objectUrl, item.name, item.result);
+
+                await new Promise(r => setTimeout(r, 800));
+
+                // Sort animation
+                beltChevrons.classList.remove("paused");
+                cameraStatus.textContent = "En attente";
+
+                const pieceRect = piece.getBoundingClientRect();
+                const binOkRect = binOk.getBoundingClientRect();
+                const binDefRect = binDef.getBoundingClientRect();
+
+                const targetX = isOk
+                    ? binOkRect.left + binOkRect.width / 2 - pieceRect.left - pieceRect.width / 2
+                    : binDefRect.left + binDefRect.width / 2 - pieceRect.left - pieceRect.width / 2;
+
+                gsap.to("#armPusher", {
+                    x: isOk ? -30 : 30,
+                    duration: 0.2,
+                    yoyo: true,
+                    repeat: 1,
+                });
+
+                await new Promise(resolveAnim => {
+                    gsap.to(piece, {
+                        x: targetX,
+                        y: 40,
+                        opacity: 0,
+                        duration: 0.6,
+                        ease: "power2.in",
+                        onComplete: () => {
+                            const bin = isOk ? binOk : binDef;
+                            bin.classList.add(isOk ? "flash-ok" : "flash-def");
+                            setTimeout(() => bin.classList.remove("flash-ok", "flash-def"), 600);
+
+                            if (isOk) binOkCount.textContent = state.stats.ok;
+                            else binDefCount.textContent = state.stats.def;
+                            resolveAnim();
+                        },
+                    });
+                });
+
+                await new Promise(r => setTimeout(r, 200));
+                tl.resume();
+            });
+
+            tl.to({}, { duration: 0.1 });
+        });
+    }
+
+    // -----------------------------------------------------------------------
+    // API call
+    // -----------------------------------------------------------------------
+    async function classifyImage(file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetch("/api/classify", { method: "POST", body: formData });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        return await response.json();
+    }
+
+    // -----------------------------------------------------------------------
+    // UI Helpers
+    // -----------------------------------------------------------------------
+    function updateResult(type, icon, text) {
+        resultDisplay.className = `result-display ${type === "classifying" ? "" : type}`;
+        resultContent.innerHTML = `
+            <span class="result-icon">${icon}</span>
+            <span class="result-text">${text}</span>
+        `;
+    }
+
+    function updateStats() {
+        statTotal.textContent = state.stats.total;
+        statOk.textContent = state.stats.ok;
+        statDef.textContent = state.stats.def;
+        statRate.textContent = state.stats.total > 0
+            ? `${((state.stats.ok / state.stats.total) * 100).toFixed(1)}%`
+            : "—";
+    }
+
+    // -----------------------------------------------------------------------
+    // Pause / Resume (called by nav.js)
+    // -----------------------------------------------------------------------
+    function pause() {
+        state.paused = true;
+        // Pause active GSAP timeline if any
+        if (state.activeTl) state.activeTl.pause();
+        beltChevrons.classList.add("paused");
+    }
+
+    function resume() {
+        state.paused = false;
+        // Resume active GSAP timeline if any
+        if (state.activeTl && state.activeTl.paused()) state.activeTl.resume();
+        beltChevrons.classList.remove("paused");
+    }
+
+    // -----------------------------------------------------------------------
+    // Public API
+    // -----------------------------------------------------------------------
+    return { pause, resume, state };
+})();

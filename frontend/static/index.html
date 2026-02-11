@@ -3,8 +3,8 @@
 <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>IA Week — Contrôle Qualité Convoyeur</title>
-    <link rel="stylesheet" href="/style.css?v=2" />
+    <title>IA Week — Contrôle Qualité</title>
+    <link rel="stylesheet" href="/style.css?v=4" />
     <!-- GSAP for animations -->
     <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
 </head>
@@ -19,11 +19,14 @@
     <!-- ===== HEADER ===== -->
     <header class="header">
         <div class="header-left">
-            <span class="header-icon">🏭</span>
-            <h1>Contrôle Qualité — Convoyeur IA</h1>
+            <span class="header-icon" id="headerIcon">🏭</span>
+            <h1 id="headerTitle">Contrôle Qualité — Convoyeur IA</h1>
         </div>
         <div class="header-right">
-            <a href="/similarity.html" class="btn-nav">🔍 Similarité</a>
+            <!-- SPA navigation tabs -->
+            <button class="btn-nav active" id="navConveyor" data-view="conveyor">🏭 Convoyeur</button>
+            <button class="btn-nav" id="navSimilarity" data-view="similarity">🔍 Similarité</button>
+
             <div class="status-indicator" id="backendStatus">
                 <span class="status-dot offline"></span>
                 <span class="status-text">Connexion...</span>
@@ -33,127 +36,203 @@
         </div>
     </header>
 
-    <!-- ===== MAIN LAYOUT ===== -->
-    <main class="main-layout">
+    <!-- ===== APP SHELL — view + shared sidebar ===== -->
+    <div class="app-shell">
 
-        <!-- LEFT PANEL — Upload & Queue -->
-        <aside class="panel panel-left">
-            <div class="panel-header">
-                <h2>Chargement des pièces</h2>
-            </div>
+        <!-- ============================================================
+             VIEW 1: CONVEYOR (classification)
+             ============================================================ -->
+        <main class="main-layout view-content" id="viewConveyor">
 
-            <div class="upload-zone" id="uploadZone">
-                <div class="upload-icon">📷</div>
-                <p>Glissez vos images ici</p>
-                <p class="upload-hint">ou cliquez pour sélectionner</p>
-                <input type="file" id="fileInput" multiple accept="image/*" hidden />
-            </div>
-
-            <div class="queue-section">
-                <h3>File d'attente <span class="queue-count" id="queueCount">0</span></h3>
-                <div class="queue-list" id="queueList"></div>
-            </div>
-        </aside>
-
-        <!-- CENTER — Conveyor Belt -->
-        <section class="conveyor-section">
-            <!-- Stats bar -->
-            <div class="stats-bar">
-                <div class="stat">
-                    <span class="stat-label">Total</span>
-                    <span class="stat-value" id="statTotal">0</span>
+            <!-- LEFT PANEL — Upload & Queue -->
+            <aside class="panel panel-left">
+                <div class="panel-header">
+                    <h2>Chargement des pièces</h2>
                 </div>
-                <div class="stat stat-ok">
-                    <span class="stat-label">Conformes</span>
-                    <span class="stat-value" id="statOk">0</span>
-                </div>
-                <div class="stat stat-def">
-                    <span class="stat-label">Défauts</span>
-                    <span class="stat-value" id="statDef">0</span>
-                </div>
-                <div class="stat">
-                    <span class="stat-label">Taux OK</span>
-                    <span class="stat-value" id="statRate">—</span>
-                </div>
-            </div>
 
-            <!-- Conveyor visual -->
-            <div class="conveyor-container">
-                <!-- OK bin (left) -->
-                <div class="bin bin-ok" id="binOk">
-                    <div class="bin-label">CONFORME</div>
-                    <div class="bin-body">
-                        <div class="bin-count" id="binOkCount">0</div>
+                <div class="upload-zone" id="convUploadZone">
+                    <div class="upload-icon">📷</div>
+                    <p>Glissez vos images ici</p>
+                    <p class="upload-hint">ou cliquez pour sélectionner</p>
+                    <input type="file" id="convFileInput" multiple accept="image/*" hidden />
+                </div>
+
+                <div class="queue-section">
+                    <h3>File d'attente <span class="queue-count" id="queueCount">0</span></h3>
+                    <div class="queue-list" id="queueList"></div>
+                </div>
+            </aside>
+
+            <!-- CENTER — Conveyor Belt -->
+            <section class="conveyor-section">
+                <!-- Stats bar -->
+                <div class="stats-bar">
+                    <div class="stat">
+                        <span class="stat-label">Total</span>
+                        <span class="stat-value" id="statTotal">0</span>
+                    </div>
+                    <div class="stat stat-ok">
+                        <span class="stat-label">Conformes</span>
+                        <span class="stat-value" id="statOk">0</span>
+                    </div>
+                    <div class="stat stat-def">
+                        <span class="stat-label">Défauts</span>
+                        <span class="stat-value" id="statDef">0</span>
+                    </div>
+                    <div class="stat">
+                        <span class="stat-label">Taux OK</span>
+                        <span class="stat-value" id="statRate">—</span>
                     </div>
                 </div>
 
-                <!-- Belt area -->
-                <div class="belt-area">
-                    <!-- Incoming zone -->
-                    <div class="belt-zone zone-incoming">
-                        <div class="zone-label">ENTRÉE</div>
+                <!-- Conveyor visual -->
+                <div class="conveyor-container">
+                    <!-- OK bin (left) -->
+                    <div class="bin bin-ok" id="binOk">
+                        <div class="bin-label">CONFORME</div>
+                        <div class="bin-body">
+                            <div class="bin-count" id="binOkCount">0</div>
+                        </div>
                     </div>
 
-                    <!-- Belt surface with animated chevrons -->
-                    <div class="belt-surface" id="beltSurface">
-                        <div class="belt-chevrons" id="beltChevrons"></div>
-                        <!-- Pieces will be injected here by JS -->
-                    </div>
+                    <!-- Belt area -->
+                    <div class="belt-area">
+                        <!-- Incoming zone -->
+                        <div class="belt-zone zone-incoming">
+                            <div class="zone-label">ENTRÉE</div>
+                        </div>
 
-                    <!-- Camera / scanner zone -->
-                    <div class="camera-zone" id="cameraZone">
-                        <div class="camera-housing">
-                            <div class="camera-lens" id="cameraLens">
-                                <div class="camera-ring"></div>
-                                <div class="camera-ring ring-2"></div>
-                                <div class="camera-center"></div>
+                        <!-- Belt surface with animated chevrons -->
+                        <div class="belt-surface" id="beltSurface">
+                            <div class="belt-chevrons" id="beltChevrons"></div>
+                        </div>
+
+                        <!-- Camera / scanner zone -->
+                        <div class="camera-zone" id="cameraZone">
+                            <div class="camera-housing">
+                                <div class="camera-lens" id="cameraLens">
+                                    <div class="camera-ring"></div>
+                                    <div class="camera-ring ring-2"></div>
+                                    <div class="camera-center"></div>
+                                </div>
+                                <div class="scan-line" id="scanLine"></div>
                             </div>
-                            <div class="scan-line" id="scanLine"></div>
+                            <div class="camera-label">ANALYSE IA</div>
+                            <div class="camera-status" id="cameraStatus">En attente</div>
                         </div>
-                        <div class="camera-label">ANALYSE IA</div>
-                        <div class="camera-status" id="cameraStatus">En attente</div>
+
+                        <!-- Sorting zone -->
+                        <div class="belt-zone zone-sorting">
+                            <div class="zone-label">TRI</div>
+                            <div class="sorting-arm" id="sortingArm">
+                                <div class="arm-base"></div>
+                                <div class="arm-pusher" id="armPusher"></div>
+                            </div>
+                        </div>
                     </div>
 
-                    <!-- Sorting zone -->
-                    <div class="belt-zone zone-sorting">
-                        <div class="zone-label">TRI</div>
-                        <div class="sorting-arm" id="sortingArm">
-                            <div class="arm-base"></div>
-                            <div class="arm-pusher" id="armPusher"></div>
+                    <!-- Defect bin (right) -->
+                    <div class="bin bin-def" id="binDef">
+                        <div class="bin-label">DÉFAUT</div>
+                        <div class="bin-body">
+                            <div class="bin-count" id="binDefCount">0</div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Defect bin (right) -->
-                <div class="bin bin-def" id="binDef">
-                    <div class="bin-label">DÉFAUT</div>
-                    <div class="bin-body">
-                        <div class="bin-count" id="binDefCount">0</div>
+                <!-- Result display -->
+                <div class="result-display" id="resultDisplay">
+                    <div class="result-content" id="resultContent">
+                        <span class="result-icon"></span>
+                        <span class="result-text">Chargez des images pour démarrer le convoyeur</span>
                     </div>
                 </div>
-            </div>
+            </section>
+        </main>
 
-            <!-- Result display -->
-            <div class="result-display" id="resultDisplay">
-                <div class="result-content" id="resultContent">
-                    <span class="result-icon"></span>
-                    <span class="result-text">Chargez des images pour démarrer le convoyeur</span>
+        <!-- ============================================================
+             VIEW 2: SIMILARITY (search)
+             ============================================================ -->
+        <main class="sim-layout view-content" id="viewSimilarity" style="display:none;">
+
+            <!-- LEFT — Upload + Query Image -->
+            <section class="sim-query-panel">
+                <!-- Query image preview -->
+                <div class="sim-query-preview" id="queryPreview" style="display:none;">
+                    <img id="queryImage" src="" alt="Image requête" />
+                    <div class="sim-query-info" id="queryInfo"></div>
                 </div>
-            </div>
-        </section>
 
-        <!-- RIGHT PANEL — History / Log -->
-        <aside class="panel panel-right">
+                <!-- Classification result -->
+                <div class="sim-classification" id="classificationResult" style="display:none;">
+                    <div class="sim-class-label" id="classLabel"></div>
+                    <div class="sim-class-confidence" id="classConfidence"></div>
+                    <div class="sim-class-time" id="classTime"></div>
+                </div>
+
+                <!-- Search button (manual trigger) -->
+                <button class="btn-search-similar" id="btnSearchSimilar" style="display:none;">
+                    🔍 Rechercher les similaires
+                </button>
+
+                <!-- Metric info -->
+                <div class="sim-metric-info" id="metricInfo" style="display:none;"></div>
+            </section>
+
+            <!-- RIGHT — Results carousel -->
+            <section class="sim-results-panel">
+                <div class="sim-results-header">
+                    <h2>🏆 Top 5 — Images les plus similaires</h2>
+                </div>
+
+                <!-- Loading state -->
+                <div class="sim-loading" id="loadingState" style="display:none;">
+                    <div class="sim-spinner"></div>
+                    <p>Recherche en cours...</p>
+                </div>
+
+                <!-- Empty state -->
+                <div class="sim-empty" id="emptyState">
+                    <div class="sim-empty-icon">🔎</div>
+                    <p>Sélectionnez une image depuis l'historique pour trouver les pièces similaires</p>
+                </div>
+
+                <!-- Carousel -->
+                <div class="sim-carousel-wrapper" id="carouselWrapper" style="display:none;">
+                    <button class="sim-carousel-btn sim-carousel-prev" id="btnPrev">❮</button>
+                    <div class="sim-carousel" id="carousel"></div>
+                    <button class="sim-carousel-btn sim-carousel-next" id="btnNext">❯</button>
+                </div>
+
+                <!-- Enlarged image overlay -->
+                <div class="sim-overlay" id="imageOverlay" style="display:none;">
+                    <div class="sim-overlay-content">
+                        <button class="sim-overlay-close" id="overlayClose">✕</button>
+                        <img id="overlayImage" src="" alt="" />
+                        <div class="sim-overlay-info" id="overlayInfo"></div>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- ============================================================
+             SHARED SIDEBAR — History (always visible)
+             ============================================================ -->
+        <aside class="panel panel-right sidebar-history" id="sidebarHistory">
             <div class="panel-header">
-                <h2>Historique</h2>
-                <button class="btn-clear" onclick="clearHistory()">Effacer</button>
+                <h2>📋 Historique</h2>
+                <button class="btn-clear" id="btnClearHistory">Effacer</button>
             </div>
-            <div class="history-list" id="historyList">
+            <div class="history-list" id="sharedHistoryList">
                 <div class="history-empty">Aucune pièce analysée</div>
             </div>
         </aside>
-    </main>
+    </div>
 
-    <script src="/conveyor.js?v=2"></script>
+    <!-- Scripts: order matters — history first, then views, then nav -->
+    <script src="/history.js?v=4"></script>
+    <script src="/conveyor.js?v=4"></script>
+    <script src="/similarity.js?v=4"></script>
+    <script src="/nav.js?v=4"></script>
 </body>
 </html>

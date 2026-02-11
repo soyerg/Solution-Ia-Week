@@ -42,10 +42,12 @@ Ce projet a été développé dans le cadre de l'**IA Week**. Il s'agit d'une ap
 
 - 🔍 **Classification automatique** — Détection de défauts sur pièces de fonderie
 - 🏭 **Convoyeur animé** — Interface industrielle avec animation GSAP du tri des pièces
-- � **Recherche de similarité** — Trouve les 10 images les plus proches dans le dataset pour chaque pièce analysée
+- 🔍 **Recherche de similarité** — Trouve les 5 images les plus proches dans le dataset pour chaque pièce analysée
 - 📊 **Statistiques en temps réel** — Taux de conformité, compteurs, historique
 - 🖱️ **Drag & Drop** — Glissez-déposez vos images pour les analyser
 - 📋 **File d'attente** — Traitement séquentiel avec suivi visuel
+- 📋 **Historique partagé** — Sidebar d'historique commune aux deux vues, persistant lors de la navigation
+- 🔄 **Navigation SPA** — Basculement instantané entre Convoyeur et Similarité sans rechargement
 - 🎠 **Carousel interactif** — Navigation horizontale dans les résultats de similarité avec zoom au clic
 - 🔒 **Authentification** — Page de connexion sécurisée
 - 🐳 **Dockerisé** — Déploiement en un seul commande
@@ -68,9 +70,10 @@ L'application est composée de **2 services Docker** communiquant via un réseau
   │  HTML/CSS/JS     │  /api/*  │  PyTorch + SVM       │
   │  (port 3000)     │          │  (port 8000)         │
   │                  │          │                      │
-  │  • Convoyeur     │          │  /api/classify       │
-  │  • Similarité    │          │  /api/similar        │
-  │                  │          │  /api/images/*       │
+  │  • Page unique SPA │          │  /api/classify       │
+  │  • Vue Convoyeur   │          │  /api/similar        │
+  │  • Vue Similarité  │          │  /api/images/*       │
+  │  • Historique      │          │                      │
   └──────────────────┘          └──────────────────────┘
                                     │           │
                              ┌──────┴──┐ ┌──────┴───────┐
@@ -184,11 +187,13 @@ docker compose down
 
 ### Recherche de similarité
 
-1. **Cliquez** sur **🔍 Similarité** dans le header (ou allez sur `/similarity.html`)
-2. **Glissez-déposez** une image dans la zone d'upload
-3. **Visualisez** le résultat de classification (OK/DEF + confiance)
-4. **Parcourez** le carousel des 10 images les plus similaires du dataset
-5. **Cliquez** sur une image du carousel pour l'agrandir
+1. **Analysez** des pièces via le convoyeur (elles s'ajoutent à l'historique partagé)
+2. **Cliquez** sur une image dans la **sidebar d'historique** (à droite)
+3. La vue **Similarité** s'ouvre avec l'image pré-chargée et son résultat de classification
+4. **Cliquez** sur **« 🔍 Rechercher les similaires »** pour lancer la recherche
+5. **Parcourez** le carousel des 5 images les plus similaires du dataset
+6. **Cliquez** sur une image du carousel pour l'agrandir
+7. **Revenez** au convoyeur via le bouton **🏭 Convoyeur** — tout l'état est conservé
 
 ### Formats d'images supportés
 
@@ -217,12 +222,14 @@ Solution Ia Week/
 │   ├── main.py                 # Serveur FastAPI (proxy + static)
 │   ├── requirements.txt        # Dépendances Python frontend
 │   └── static/                 # Fichiers servis au navigateur
-│       ├── index.html          # Page principale (convoyeur)
-│       ├── similarity.html     # Page de recherche de similarité
+│       ├── index.html          # Page principale SPA (convoyeur + similarité)
+│       ├── similarity.html     # Redirection vers index.html (rétrocompat)
 │       ├── login.html          # Page de connexion
 │       ├── style.css           # Styles (thème industriel sombre)
-│       ├── conveyor.js         # Logique JS convoyeur + animations GSAP
-│       └── similarity.js       # Logique JS recherche de similarité
+│       ├── conveyor.js         # Module JS convoyeur + animations GSAP
+│       ├── similarity.js       # Module JS recherche de similarité
+│       ├── history.js          # Module JS historique partagé (AppHistory)
+│       └── nav.js              # Module JS navigation SPA + health check
 │
 ├── models/                     # Modèles ML sérialisés
 │   ├── resnet50_extractor.pth  # Poids ResNet50 (extraction features)
@@ -330,7 +337,7 @@ Retourne l'image depuis le dossier `casting_data/`. Protégé contre le path tra
 | `inference_time_ms` | Temps de traitement en millisecondes            |
 | `filename`          | Nom du fichier envoyé                          |
 | `metric`            | Métrique de distance utilisée (sur `/api/similar`) |
-| `similar`           | Top 10 images les plus proches (sur `/api/similar`) |
+| `similar`           | Top 5 images les plus proches (sur `/api/similar`) |
 
 ---
 

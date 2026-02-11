@@ -2,9 +2,9 @@
 
 ## Vue d'ensemble
 
-Le projet est une application web conteneurisée (Docker) à **deux services** qui classifie des images de pièces de fonderie en **conforme (OK)** ou **défectueuse (DEF)** grâce à un pipeline de Machine Learning combinant un réseau de neurones profond (ResNet50) et un SVM. L'application permet également de **rechercher les 10 images les plus similaires** dans le dataset pour chaque pièce analysée.
+Le projet est une application web conteneurisée (Docker) à **deux services** qui classifie des images de pièces de fonderie en **conforme (OK)** ou **défectueuse (DEF)** grâce à un pipeline de Machine Learning combinant un réseau de neurones profond (ResNet50) et un SVM. L'application permet également de **rechercher les 5 images les plus similaires** dans le dataset pour chaque pièce analysée.
 
-Un **notebook Jupyter** (`ia_training.ipynb`) est fourni pour encoder le dataset et benchmarker les métriques de distance.
+L'interface est une **Single Page Application (SPA)** avec deux vues (Convoyeur et Similarité) partageant un **historique commun** des images analysées. Un **notebook Jupyter** (`ia_training.ipynb`) est fourni pour encoder le dataset et benchmarker les métriques de distance.
 
 ---
 
@@ -56,7 +56,9 @@ Un **notebook Jupyter** (`ia_training.ipynb`) est fourni pour encoder le dataset
 | **Image Docker**| `python:3.11-slim`                         |
 
 **Responsabilités :**
-- Servir les fichiers statiques (`index.html`, `similarity.html`, `style.css`, `conveyor.js`, `similarity.js`, `login.html`)
+- Servir les fichiers statiques (`index.html`, `style.css`, `conveyor.js`, `similarity.js`, `history.js`, `nav.js`, `login.html`)
+- L'interface est une **SPA** : `index.html` contient les deux vues (Convoyeur + Similarité) avec basculement JavaScript sans rechargement
+- `similarity.html` redirige simplement vers `index.html` (rétrocompatibilité)
 - Proxifier les appels `/api/*` vers le backend (via `httpx`) : `/api/classify`, `/api/similar`, `/api/images/*`, `/api/health`
 - Gérer le routage : les routes `/api/*` sont déclarées avant le montage statique pour avoir la priorité
 
@@ -82,7 +84,7 @@ Un **notebook Jupyter** (`ia_training.ipynb`) est fourni pour encoder le dataset
 - Extraire les features des images avec ResNet50
 - Classifier les images avec le SVM
 - Retourner le résultat (label, confiance, temps d'inférence)
-- Rechercher les 10 images les plus similaires dans le dataset encodé
+- Rechercher les 5 images les plus similaires dans le dataset encodé
 - Servir les images du dossier `casting_data/` via un endpoint dédié
 
 **Dépendances Python :**
@@ -186,7 +188,7 @@ La classe `FeatureExtractor` (`backend/feature_extractor.py`) supporte 4 backbon
 |---------|--------------------|------------------------------------------------|
 | `GET`   | `/api/health`      | État du serveur (device, modèles)              |
 | `POST`  | `/api/classify`    | Classifier une image (multipart/form)          |
-| `POST`  | `/api/similar`     | Classification + top 10 images similaires      |
+| `POST`  | `/api/similar`     | Classification + top 5 images similaires       |
 | `GET`   | `/api/images/{p}`  | Servir une image du dataset `casting_data/`    |
 
 ### Frontend (port 3000 → 80)
@@ -271,21 +273,23 @@ Navigateur                    Frontend (3000)              Backend (8000)
     │◀─────────────────────────    │                            │
     │  7. Tri dans bac OK/DEF      │                            │
     │                              │                            │
-    ─── Flux de Recherche de Similarité ───
+    ─── Flux de Recherche de Similarité (SPA) ───
 
-    │  8. Upload sur /similarity   │                            │
-    │────────────────────────────▶   │                            │
-    │                              │  9. POST /api/similar      │
+    │  8. Clic historique →         │                            │
+    │     vue Similarité (SPA)      │                            │
+    │  9. Bouton "Rechercher"       │                            │
+    │────────────────────────────▶  │                            │
+    │                              │  10. POST /api/similar     │
     │                              │───────────────────────────▶│
-    │                              │     10. ResNet50 → SVM     │
+    │                              │     11. ResNet50 → SVM     │
     │                              │     + Similarity search    │
     │                              │     (distance metric on    │
     │                              │      features_dataset.npz) │
     │                              │                            │
-    │                              │  11. JSON {label, similar} │
+    │                              │  12. JSON {label, similar} │
     │                              │◀───────────────────────────│
-    │  12. Carousel top 10         │                            │
+    │  13. Carousel top 5          │                            │
     │◀─────────────────────────    │                            │
-    │  13. GET /api/images/* (×10)  │                            │
+    │  14. GET /api/images/* (×5)  │                            │
     │                        ──────│───────────────────────────▶│
     │                              │                            │```

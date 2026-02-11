@@ -320,10 +320,10 @@ async def find_similar(file: UploadFile = File(...)):
         }
         result_info = label_map.get(label, label_map["def"])
 
-        # 5. Find top-10 similar images
+        # 5. Find top-5 similar images
         query_vec = features_scaled.flatten()
         distances = compute_distances(query_vec, dataset_features, similarity_config or {})
-        top_indices = np.argsort(distances)[:10]
+        top_indices = np.argsort(distances)[:5]
 
         similar = []
         for rank, idx in enumerate(top_indices):
