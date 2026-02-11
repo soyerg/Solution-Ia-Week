@@ -71,7 +71,7 @@ test_transform = transforms.Compose([
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load models into memory at startup."""
-    global extractor, svm_model, scaler
+    global extractor, svm_model, scaler, dataset_features, dataset_paths, dataset_labels, similarity_config
 
     logger.info("=" * 60)
     logger.info("LOADING MODELS")
