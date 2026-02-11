@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  # ==========================================================
+  # FRONTEND — exposed to outside (port 3000)
+  # Serves static files + proxies /api/* to backend
+  # ==========================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: casting-frontend
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./frontend:/app          # Live reload: edit code on host
+    depends_on:
+      - backend
+    networks:
+      - casting-net
+    restart: unless-stopped
+
+  # ==========================================================
+  # BACKEND — internal only (port 8000, NOT exposed)
+  # FastAPI + ResNet50 (GPU) + SVM inference
+  # ==========================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: casting-backend
+    # NO ports exposed to host — only accessible from frontend via Docker network
+    volumes:
+      - ./backend:/app           # Live reload: edit code on host
+      - ./models:/models         # Model files (svm_model.joblib, scaler.joblib)
+    networks:
+      - casting-net
+    restart: unless-stopped
+    # GPU support — uncomment the block below when NVIDIA drivers are installed
+    # deploy:
+    #   resources:
+    #     reservations:
+    #       devices:
+    #         - driver: nvidia
+    #           count: 1
+    #           capabilities: [gpu]
+
+networks:
+  casting-net:
+    driver: bridge
