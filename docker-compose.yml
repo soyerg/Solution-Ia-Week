@@ -32,6 +32,7 @@ services:
     volumes:
       - ./backend:/app           # Live reload: edit code on host
       - ./models:/models         # Model files (svm_model.joblib, scaler.joblib)
+      - ./casting_data:/casting_data  # Dataset images (served via /api/images)
     networks:
       - casting-net
     restart: unless-stopped

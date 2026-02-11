@@ -1,0 +1,7 @@
+{
+  "type": "single",
+  "name": "correlation",
+  "metric": "correlation",
+  "same_class_ratio": 0.935,
+  "ms_per_query": 3.919
+}

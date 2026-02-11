@@ -2,7 +2,9 @@
 
 ## Vue d'ensemble
 
-Le projet est une application web conteneurisée (Docker) à **deux services** qui classifie des images de pièces de fonderie en **conforme (OK)** ou **défectueuse (DEF)** grâce à un pipeline de Machine Learning combinant un réseau de neurones profond (ResNet50) et un SVM.
+Le projet est une application web conteneurisée (Docker) à **deux services** qui classifie des images de pièces de fonderie en **conforme (OK)** ou **défectueuse (DEF)** grâce à un pipeline de Machine Learning combinant un réseau de neurones profond (ResNet50) et un SVM. L'application permet également de **rechercher les 10 images les plus similaires** dans le dataset pour chaque pièce analysée.
+
+Un **notebook Jupyter** (`ia_training.ipynb`) est fourni pour encoder le dataset et benchmarker les métriques de distance.
 
 ---
 
@@ -54,8 +56,8 @@ Le projet est une application web conteneurisée (Docker) à **deux services** q
 | **Image Docker**| `python:3.11-slim`                         |
 
 **Responsabilités :**
-- Servir les fichiers statiques (`index.html`, `style.css`, `conveyor.js`, `login.html`)
-- Proxifier les appels `/api/*` vers le backend (via `httpx`)
+- Servir les fichiers statiques (`index.html`, `similarity.html`, `style.css`, `conveyor.js`, `similarity.js`, `login.html`)
+- Proxifier les appels `/api/*` vers le backend (via `httpx`) : `/api/classify`, `/api/similar`, `/api/images/*`, `/api/health`
 - Gérer le routage : les routes `/api/*` sont déclarées avant le montage statique pour avoir la priorité
 
 **Dépendances Python :**
@@ -76,14 +78,17 @@ Le projet est une application web conteneurisée (Docker) à **deux services** q
 | **Image Docker**| `python:3.12-slim`                         |
 
 **Responsabilités :**
-- Charger les modèles au démarrage (ResNet50, SVM, Scaler)
+- Charger les modèles au démarrage (ResNet50, SVM, Scaler, dataset de features)
 - Extraire les features des images avec ResNet50
 - Classifier les images avec le SVM
 - Retourner le résultat (label, confiance, temps d'inférence)
+- Rechercher les 10 images les plus similaires dans le dataset encodé
+- Servir les images du dossier `casting_data/` via un endpoint dédié
 
 **Dépendances Python :**
 - `torch` + `torchvision` — réseau de neurones (ResNet50)
 - `scikit-learn` — modèle SVM + StandardScaler
+- `scipy` — calcul des distances (similarité)
 - `joblib` — chargement des modèles sérialisés
 - `numpy` — calculs numériques
 - `Pillow` — manipulation d'images
@@ -177,18 +182,22 @@ La classe `FeatureExtractor` (`backend/feature_extractor.py`) supporte 4 backbon
 
 ### Backend (port 8000, interne)
 
-| Méthode | Route           | Description                           |
-|---------|-----------------|---------------------------------------|
-| `GET`   | `/api/health`   | État du serveur (device, modèles)     |
-| `POST`  | `/api/classify` | Classifier une image (multipart/form) |
+| Méthode | Route              | Description                                    |
+|---------|--------------------|------------------------------------------------|
+| `GET`   | `/api/health`      | État du serveur (device, modèles)              |
+| `POST`  | `/api/classify`    | Classifier une image (multipart/form)          |
+| `POST`  | `/api/similar`     | Classification + top 10 images similaires      |
+| `GET`   | `/api/images/{p}`  | Servir une image du dataset `casting_data/`    |
 
 ### Frontend (port 3000 → 80)
 
-| Méthode | Route           | Description                           |
-|---------|-----------------|---------------------------------------|
-| `GET`   | `/api/health`   | Proxy → backend `/api/health`         |
-| `POST`  | `/api/classify` | Proxy → backend `/api/classify`       |
-| `GET`   | `/*`            | Fichiers statiques (HTML, CSS, JS)    |
+| Méthode | Route              | Description                                    |
+|---------|--------------------|------------------------------------------------|
+| `GET`   | `/api/health`      | Proxy → backend `/api/health`                  |
+| `POST`  | `/api/classify`    | Proxy → backend `/api/classify`                |
+| `POST`  | `/api/similar`     | Proxy → backend `/api/similar`                 |
+| `GET`   | `/api/images/{p}`  | Proxy → backend `/api/images/{p}`              |
+| `GET`   | `/*`               | Fichiers statiques (HTML, CSS, JS)             |
 
 ---
 
@@ -196,13 +205,15 @@ La classe `FeatureExtractor` (`backend/feature_extractor.py`) supporte 4 backbon
 
 ```yaml
 volumes:
-  - ./frontend:/app     # Code source frontend (live reload)
-  - ./backend:/app      # Code source backend (live reload)
-  - ./models:/models    # Modèles ML (resnet50_extractor.pth, svm_model.joblib, scaler.joblib)
+  - ./frontend:/app       # Code source frontend (live reload)
+  - ./backend:/app        # Code source backend (live reload)
+  - ./models:/models      # Modèles ML (resnet50_extractor.pth, svm_model.joblib, scaler.joblib, features_dataset.npz)
+  - ./casting_data:/casting_data  # Dataset d'images (servi via /api/images)
 ```
 
 - Les volumes permettent le **rechargement automatique** du code en développement (`--reload`)
 - Les modèles sont montés séparément pour pouvoir être mis à jour sans rebuild
+- Le dataset `casting_data/` est monté en lecture dans le backend pour servir les images et calculer les similarités
 
 ---
 
@@ -233,8 +244,9 @@ Sans GPU, PyTorch utilise automatiquement le **CPU** (`torch.device("cuda" if to
 | **Isolation backend**     | Pas de port exposé, accessible uniquement via le réseau Docker |
 | **Authentification**      | Côté client uniquement (`sessionStorage`), adaptée pour démo |
 | **Validation des fichiers** | Vérification du `content_type` (doit commencer par `image/`) |
-| **Timeout proxy**         | 60s pour `/api/classify`, 10s pour `/api/health`         |
+| **Timeout proxy**         | 60s pour `/api/classify`, 120s pour `/api/similar`, 30s pour images, 10s pour `/api/health` |
 | **Gestion d'erreurs**     | Codes HTTP appropriés (400, 500, 502, 503)               |
+| **Path traversal**        | Protection sur `/api/images/*` (vérification du chemin résolu) |
 
 ---
 
@@ -259,4 +271,21 @@ Navigateur                    Frontend (3000)              Backend (8000)
     │◀─────────────────────────    │                            │
     │  7. Tri dans bac OK/DEF      │                            │
     │                              │                            │
-```
+    ─── Flux de Recherche de Similarité ───
+
+    │  8. Upload sur /similarity   │                            │
+    │────────────────────────────▶   │                            │
+    │                              │  9. POST /api/similar      │
+    │                              │───────────────────────────▶│
+    │                              │     10. ResNet50 → SVM     │
+    │                              │     + Similarity search    │
+    │                              │     (distance metric on    │
+    │                              │      features_dataset.npz) │
+    │                              │                            │
+    │                              │  11. JSON {label, similar} │
+    │                              │◀───────────────────────────│
+    │  12. Carousel top 10         │                            │
+    │◀─────────────────────────    │                            │
+    │  13. GET /api/images/* (×10)  │                            │
+    │                        ──────│───────────────────────────▶│
+    │                              │                            │```

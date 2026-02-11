@@ -1,4 +1,5 @@
 scikit-learn==1.6.1
+scipy
 joblib
 numpy<2
 Pillow

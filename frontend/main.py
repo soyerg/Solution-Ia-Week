@@ -86,6 +86,55 @@ async def proxy_health():
         )
 
 
+@app.post("/api/similar")
+async def proxy_similar(file: UploadFile = File(...)):
+    """Proxy similarity search request to the backend."""
+    try:
+        async with httpx.AsyncClient(timeout=120.0) as client:
+            file_content = await file.read()
+            response = await client.post(
+                f"{BACKEND_URL}/api/similar",
+                files={"file": (file.filename, file_content, file.content_type)},
+            )
+        return JSONResponse(
+            content=response.json(),
+            status_code=response.status_code,
+        )
+    except httpx.ConnectError:
+        return JSONResponse(
+            content={"detail": "Backend service unavailable"},
+            status_code=503,
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"detail": f"Proxy error: {str(e)}"},
+            status_code=502,
+        )
+
+
+@app.get("/api/images/{path:path}")
+async def proxy_image(path: str):
+    """Proxy image serving from backend casting_data directory."""
+    try:
+        async with httpx.AsyncClient(timeout=30.0) as client:
+            response = await client.get(f"{BACKEND_URL}/api/images/{path}")
+        if response.status_code == 200:
+            return Response(
+                content=response.content,
+                media_type=response.headers.get("content-type", "image/jpeg"),
+                status_code=200,
+            )
+        return JSONResponse(
+            content={"detail": "Image not found"},
+            status_code=response.status_code,
+        )
+    except Exception as e:
+        return JSONResponse(
+            content={"detail": f"Proxy error: {str(e)}"},
+            status_code=502,
+        )
+
+
 # ---------------------------------------------------------------------------
 # Static files — served AFTER api routes so /api/* takes priority
 # ---------------------------------------------------------------------------

@@ -42,12 +42,15 @@ Ce projet a été développé dans le cadre de l'**IA Week**. Il s'agit d'une ap
 
 - 🔍 **Classification automatique** — Détection de défauts sur pièces de fonderie
 - 🏭 **Convoyeur animé** — Interface industrielle avec animation GSAP du tri des pièces
+- � **Recherche de similarité** — Trouve les 10 images les plus proches dans le dataset pour chaque pièce analysée
 - 📊 **Statistiques en temps réel** — Taux de conformité, compteurs, historique
 - 🖱️ **Drag & Drop** — Glissez-déposez vos images pour les analyser
 - 📋 **File d'attente** — Traitement séquentiel avec suivi visuel
+- 🎠 **Carousel interactif** — Navigation horizontale dans les résultats de similarité avec zoom au clic
 - 🔒 **Authentification** — Page de connexion sécurisée
 - 🐳 **Dockerisé** — Déploiement en un seul commande
 - ♻️ **Live Reload** — Modification du code sans rebuild en développement
+- 📓 **Notebook d'entraînement** — Encodage du dataset et benchmark des métriques de distance
 
 ---
 
@@ -59,18 +62,25 @@ L'application est composée de **2 services Docker** communiquant via un réseau
   🌐 Navigateur (port 80)
          │
          ▼
-  ┌──────────────┐          ┌──────────────────┐
-  │   FRONTEND   │  proxy   │     BACKEND      │
-  │  FastAPI     │─────────▶│  FastAPI          │
-  │  HTML/CSS/JS │  /api/*  │  PyTorch + SVM   │
-  │  (port 3000) │          │  (port 8000)     │
-  └──────────────┘          └──────────────────┘
-                                    │
-                             ┌──────┴──────┐
-                             │   /models   │
-                             │ svm_model   │
-                             │ scaler      │
-                             └─────────────┘
+  ┌──────────────────┐          ┌──────────────────────┐
+  │     FRONTEND     │  proxy   │       BACKEND        │
+  │  FastAPI         │─────────▶│  FastAPI              │
+  │  HTML/CSS/JS     │  /api/*  │  PyTorch + SVM       │
+  │  (port 3000)     │          │  (port 8000)         │
+  │                  │          │                      │
+  │  • Convoyeur     │          │  /api/classify       │
+  │  • Similarité    │          │  /api/similar        │
+  │                  │          │  /api/images/*       │
+  └──────────────────┘          └──────────────────────┘
+                                    │           │
+                             ┌──────┴──┐ ┌──────┴───────┐
+                             │ /models │ │/casting_data │
+                             │svm_model│ │ (images du   │
+                             │ scaler  │ │  dataset)    │
+                             │features │ └──────────────┘
+                             │ _dataset│
+                             │  .npz   │
+                             └─────────┘
 ```
 
 > 📖 Pour plus de détails, voir [architecture.md](architecture.md)
@@ -102,14 +112,33 @@ Assurez-vous que les fichiers de modèles sont présents dans le dossier `models
 
 ```
 models/
-├── resnet50_extractor.pth  # Poids ResNet50 (extraction de features)
-├── svm_model.joblib        # Modèle SVM entraîné
-└── scaler.joblib           # StandardScaler (normalisation des features)
+├── resnet50_extractor.pth    # Poids ResNet50 (extraction de features)
+├── svm_model.joblib          # Modèle SVM entraîné
+├── scaler.joblib             # StandardScaler (normalisation des features)
+├── features_dataset.npz      # Vecteurs de features du dataset (généré par ia_training)
+└── similarity_config.json    # Configuration de la métrique de distance (généré par ia_training)
 ```
 
-> ⚠️ Ces fichiers sont générés lors de l'entraînement et doivent être fournis séparément.
+> ⚠️ Les 3 premiers fichiers sont générés lors de l'entraînement initial.
+> Les 2 derniers sont générés par le notebook `ia_training.ipynb` (voir section suivante).
 
-### 3. Lancer l'application
+### 3. Générer le dataset de similarité (optionnel mais requis pour `/similarity.html`)
+
+```bash
+# Créer un environnement Python 3.12 et exécuter le notebook
+python3.12 -m venv .venv312
+source .venv312/bin/activate
+pip install torch==2.9.0+cpu torchvision==0.24.0+cpu --index-url https://download.pytorch.org/whl/cpu
+pip install scikit-learn==1.6.1 scipy joblib numpy Pillow matplotlib
+jupyter notebook ia_training.ipynb
+```
+
+Le notebook va :
+1. Encoder toutes les images de `casting_data/` en vecteurs 2048-dim
+2. Benchmarker plusieurs métriques de distance (cosinus, euclidienne, Manhattan, etc.)
+3. Sauvegarder `models/features_dataset.npz` et `models/similarity_config.json`
+
+### 4. Lancer l'application
 
 ```bash
 docker compose up --build
@@ -153,6 +182,14 @@ docker compose down
    - Le bras de tri envoie la pièce dans le bon bac
 4. **Consultez** les statistiques et l'historique en temps réel
 
+### Recherche de similarité
+
+1. **Cliquez** sur **🔍 Similarité** dans le header (ou allez sur `/similarity.html`)
+2. **Glissez-déposez** une image dans la zone d'upload
+3. **Visualisez** le résultat de classification (OK/DEF + confiance)
+4. **Parcourez** le carousel des 10 images les plus similaires du dataset
+5. **Cliquez** sur une image du carousel pour l'agrandir
+
 ### Formats d'images supportés
 
 - JPEG / JPG
@@ -181,14 +218,28 @@ Solution Ia Week/
 │   ├── requirements.txt        # Dépendances Python frontend
 │   └── static/                 # Fichiers servis au navigateur
 │       ├── index.html          # Page principale (convoyeur)
+│       ├── similarity.html     # Page de recherche de similarité
 │       ├── login.html          # Page de connexion
 │       ├── style.css           # Styles (thème industriel sombre)
-│       └── conveyor.js         # Logique JS + animations GSAP
+│       ├── conveyor.js         # Logique JS convoyeur + animations GSAP
+│       └── similarity.js       # Logique JS recherche de similarité
 │
 ├── models/                     # Modèles ML sérialisés
 │   ├── resnet50_extractor.pth  # Poids ResNet50 (extraction features)
 │   ├── svm_model.joblib        # SVM entraîné (classification)
-│   └── scaler.joblib           # StandardScaler (normalisation)
+│   ├── scaler.joblib           # StandardScaler (normalisation)
+│   ├── features_dataset.npz   # Vecteurs de features du dataset
+│   └── similarity_config.json  # Config métrique de distance
+│
+├── casting_data/               # Dataset d'images de pièces de fonderie
+│   ├── train/
+│   │   ├── def_front/          # Images défectueuses (entraînement)
+│   │   └── ok_front/           # Images conformes (entraînement)
+│   └── test/
+│       ├── def_front/          # Images défectueuses (test)
+│       └── ok_front/           # Images conformes (test)
+│
+├── ia_training.ipynb           # Notebook : encodage dataset + benchmark distances
 │
 └── exemple_dimage/             # Images d'exemple pour tester
 ```
@@ -231,6 +282,45 @@ curl -X POST http://localhost/api/classify \
 }
 ```
 
+### `POST /api/similar` — Recherche de similarité
+
+**Requête :** `multipart/form-data` avec un champ `file` (image)
+
+```bash
+curl -X POST http://localhost/api/similar \
+  -F "file=@mon_image.jpg"
+```
+
+**Réponse :**
+```json
+{
+  "label": "def",
+  "label_fr": "Pièce Défectueuse ❌",
+  "color": "#ef4444",
+  "confidence": 0.87,
+  "inference_time_ms": 152.4,
+  "filename": "mon_image.jpg",
+  "metric": "cosine",
+  "similar": [
+    {
+      "rank": 1,
+      "path": "test/def_front/cast_def_0_100.jpeg",
+      "label": "def",
+      "distance": 0.0523,
+      "image_url": "/api/images/test/def_front/cast_def_0_100.jpeg"
+    }
+  ]
+}
+```
+
+### `GET /api/images/{path}` — Servir une image du dataset
+
+```bash
+curl http://localhost/api/images/test/ok_front/cast_ok_0_100.jpeg --output image.jpeg
+```
+
+Retourne l'image depuis le dossier `casting_data/`. Protégé contre le path traversal.
+
 | Champ               | Description                                    |
 |---------------------|------------------------------------------------|
 | `label`             | `"ok"` ou `"def"`                              |
@@ -239,6 +329,8 @@ curl -X POST http://localhost/api/classify \
 | `confidence`        | Score de confiance entre 0.5 et 1.0            |
 | `inference_time_ms` | Temps de traitement en millisecondes            |
 | `filename`          | Nom du fichier envoyé                          |
+| `metric`            | Métrique de distance utilisée (sur `/api/similar`) |
+| `similar`           | Top 10 images les plus proches (sur `/api/similar`) |
 
 ---
 

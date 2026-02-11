@@ -1,0 +1,103 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>IA Week — Recherche de Similarité</title>
+    <link rel="stylesheet" href="/style.css?v=3" />
+    <!-- GSAP for animations -->
+    <script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+</head>
+<body>
+    <!-- Auth guard -->
+    <script>
+        if (sessionStorage.getItem("authenticated") !== "true") {
+            window.location.href = "/login.html";
+        }
+    </script>
+
+    <!-- ===== HEADER ===== -->
+    <header class="header">
+        <div class="header-left">
+            <span class="header-icon">🔍</span>
+            <h1>Recherche de Similarité — IA</h1>
+        </div>
+        <div class="header-right">
+            <a href="/index.html" class="btn-nav">🏭 Convoyeur</a>
+            <div class="status-indicator" id="backendStatus">
+                <span class="status-dot offline"></span>
+                <span class="status-text">Connexion...</span>
+            </div>
+            <span class="user-badge">demo_client</span>
+            <button class="btn-logout" onclick="logout()">Déconnexion</button>
+        </div>
+    </header>
+
+    <!-- ===== MAIN CONTENT ===== -->
+    <main class="sim-layout">
+
+        <!-- LEFT — Upload + Query Image -->
+        <section class="sim-query-panel">
+            <div class="sim-upload-zone" id="uploadZone">
+                <div class="upload-icon">📷</div>
+                <p>Glissez une image ici</p>
+                <p class="upload-hint">ou cliquez pour sélectionner</p>
+                <input type="file" id="fileInput" accept="image/*" hidden />
+            </div>
+
+            <!-- Query image preview -->
+            <div class="sim-query-preview" id="queryPreview" style="display:none;">
+                <img id="queryImage" src="" alt="Image requête" />
+                <div class="sim-query-info" id="queryInfo"></div>
+            </div>
+
+            <!-- Classification result -->
+            <div class="sim-classification" id="classificationResult" style="display:none;">
+                <div class="sim-class-label" id="classLabel"></div>
+                <div class="sim-class-confidence" id="classConfidence"></div>
+                <div class="sim-class-time" id="classTime"></div>
+            </div>
+
+            <!-- Metric info -->
+            <div class="sim-metric-info" id="metricInfo" style="display:none;"></div>
+        </section>
+
+        <!-- RIGHT — Results carousel -->
+        <section class="sim-results-panel">
+            <div class="sim-results-header">
+                <h2>🏆 Top 10 — Images les plus similaires</h2>
+            </div>
+
+            <!-- Loading state -->
+            <div class="sim-loading" id="loadingState" style="display:none;">
+                <div class="sim-spinner"></div>
+                <p>Recherche en cours...</p>
+            </div>
+
+            <!-- Empty state -->
+            <div class="sim-empty" id="emptyState">
+                <div class="sim-empty-icon">🔎</div>
+                <p>Chargez une image pour trouver les pièces les plus similaires du dataset</p>
+            </div>
+
+            <!-- Carousel -->
+            <div class="sim-carousel-wrapper" id="carouselWrapper" style="display:none;">
+                <button class="sim-carousel-btn sim-carousel-prev" id="btnPrev">❮</button>
+                <div class="sim-carousel" id="carousel"></div>
+                <button class="sim-carousel-btn sim-carousel-next" id="btnNext">❯</button>
+            </div>
+
+            <!-- Enlarged image overlay -->
+            <div class="sim-overlay" id="imageOverlay" style="display:none;">
+                <div class="sim-overlay-content">
+                    <button class="sim-overlay-close" id="overlayClose">✕</button>
+                    <img id="overlayImage" src="" alt="" />
+                    <div class="sim-overlay-info" id="overlayInfo"></div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <script src="/similarity.js?v=3"></script>
+</body>
+</html>

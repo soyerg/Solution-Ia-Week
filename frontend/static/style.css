@@ -674,3 +674,376 @@ body {
 ::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
 ::-webkit-scrollbar-thumb:hover { background: #374151; }
+
+/* =================================================================
+   NAVIGATION BUTTON (header link between pages)
+   ================================================================= */
+.btn-nav {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    padding: 5px 14px;
+    font-size: 12px;
+    color: var(--blue);
+    background: rgba(59,130,246,.1);
+    border: 1px solid rgba(59,130,246,.3);
+    border-radius: 6px;
+    text-decoration: none;
+    transition: all .2s;
+    cursor: pointer;
+}
+.btn-nav:hover {
+    background: rgba(59,130,246,.2);
+    border-color: var(--blue);
+    color: #93c5fd;
+}
+
+/* =================================================================
+   SIMILARITY PAGE — Layout & Components
+   ================================================================= */
+
+/* --- Main 2-column layout --- */
+.sim-layout {
+    display: flex;
+    flex: 1;
+    overflow: hidden;
+    gap: 0;
+}
+
+/* --- Left panel: Upload + Query --- */
+.sim-query-panel {
+    width: 340px;
+    flex-shrink: 0;
+    background: var(--bg-panel);
+    border-right: 1px solid var(--border);
+    display: flex;
+    flex-direction: column;
+    padding: 20px;
+    gap: 16px;
+    overflow-y: auto;
+}
+
+.sim-upload-zone {
+    padding: 32px 16px;
+    border: 2px dashed var(--border);
+    border-radius: 12px;
+    text-align: center;
+    cursor: pointer;
+    transition: all .3s;
+}
+.sim-upload-zone:hover,
+.sim-upload-zone.dragover {
+    border-color: var(--blue);
+    background: rgba(59,130,246,.05);
+}
+
+/* Query image preview */
+.sim-query-preview {
+    border-radius: 12px;
+    overflow: hidden;
+    border: 2px solid var(--border);
+    background: var(--bg-surface);
+}
+.sim-query-preview img {
+    width: 100%;
+    aspect-ratio: 1;
+    object-fit: cover;
+    display: block;
+}
+.sim-query-info {
+    padding: 10px 14px;
+    font-size: 12px;
+    color: var(--text-muted);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    border-top: 1px solid var(--border);
+}
+
+/* Classification result card */
+.sim-classification {
+    padding: 14px 18px;
+    border-radius: 10px;
+    border: 1px solid var(--border);
+    background: var(--bg-surface);
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+}
+.sim-classification.ok {
+    border-color: rgba(34,197,94,.4);
+    background: rgba(34,197,94,.06);
+}
+.sim-classification.def {
+    border-color: rgba(239,68,68,.4);
+    background: rgba(239,68,68,.06);
+}
+.sim-class-label {
+    font-size: 16px;
+    font-weight: 700;
+}
+.sim-class-label.ok { color: var(--green); }
+.sim-class-label.def { color: var(--red); }
+.sim-class-confidence {
+    font-size: 13px;
+    color: var(--text-muted);
+}
+.sim-class-time {
+    font-size: 11px;
+    color: var(--text-dim);
+}
+
+/* Metric info badge */
+.sim-metric-info {
+    font-size: 11px;
+    color: var(--text-dim);
+    background: var(--bg-surface);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 8px 12px;
+    text-transform: uppercase;
+    letter-spacing: .5px;
+}
+
+/* --- Right panel: Results carousel --- */
+.sim-results-panel {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+    background: var(--bg-dark);
+}
+
+.sim-results-header {
+    padding: 16px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--bg-panel);
+    flex-shrink: 0;
+}
+.sim-results-header h2 {
+    font-size: 15px;
+    font-weight: 600;
+}
+
+/* Loading spinner */
+.sim-loading {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 16px;
+    color: var(--text-muted);
+}
+.sim-spinner {
+    width: 40px;
+    height: 40px;
+    border: 3px solid var(--border);
+    border-top-color: var(--blue);
+    border-radius: 50%;
+    animation: spin .8s linear infinite;
+}
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Empty state */
+.sim-empty {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+    color: var(--text-dim);
+    padding: 40px;
+}
+.sim-empty-icon { font-size: 48px; }
+.sim-empty p { font-size: 14px; text-align: center; max-width: 360px; }
+
+/* --- Carousel --- */
+.sim-carousel-wrapper {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    padding: 24px 12px;
+    gap: 8px;
+    min-height: 0;
+}
+
+.sim-carousel {
+    flex: 1;
+    display: flex;
+    gap: 16px;
+    overflow-x: auto;
+    overflow-y: hidden;
+    scroll-snap-type: x mandatory;
+    padding: 12px 4px;
+    scrollbar-width: thin;
+    scrollbar-color: var(--border) transparent;
+}
+.sim-carousel::-webkit-scrollbar { height: 4px; }
+.sim-carousel::-webkit-scrollbar-track { background: transparent; }
+.sim-carousel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 4px; }
+
+.sim-carousel-btn {
+    flex-shrink: 0;
+    width: 40px;
+    height: 40px;
+    border: 1px solid var(--border);
+    border-radius: 50%;
+    background: var(--bg-panel);
+    color: var(--text-muted);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s;
+}
+.sim-carousel-btn:hover {
+    background: var(--bg-surface);
+    border-color: var(--blue);
+    color: var(--blue);
+}
+
+/* --- Carousel cards --- */
+.sim-card {
+    flex-shrink: 0;
+    width: 200px;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    overflow: hidden;
+    cursor: pointer;
+    transition: all .2s;
+    scroll-snap-align: start;
+    display: flex;
+    flex-direction: column;
+}
+.sim-card:hover {
+    border-color: var(--blue);
+    transform: translateY(-4px);
+    box-shadow: 0 8px 24px rgba(0,0,0,.3);
+}
+
+.sim-card-rank {
+    padding: 8px 12px;
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--blue);
+    background: rgba(59,130,246,.08);
+    border-bottom: 1px solid var(--border);
+}
+
+.sim-card-img-wrapper {
+    width: 100%;
+    aspect-ratio: 1;
+    overflow: hidden;
+    background: var(--bg-surface);
+}
+.sim-card-img {
+    width: 100%;
+    height: 100%;
+    object-fit: cover;
+    display: block;
+    transition: transform .3s;
+}
+.sim-card:hover .sim-card-img {
+    transform: scale(1.05);
+}
+
+.sim-card-info {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 10px 12px 4px;
+    font-size: 12px;
+}
+.sim-card-label {
+    font-weight: 700;
+}
+.sim-card-label.ok { color: var(--green); }
+.sim-card-label.def { color: var(--red); }
+.sim-card-distance {
+    color: var(--text-dim);
+    font-size: 11px;
+    font-family: monospace;
+}
+
+.sim-card-path {
+    padding: 4px 12px 10px;
+    font-size: 10px;
+    color: var(--text-dim);
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+/* --- Image overlay --- */
+.sim-overlay {
+    position: fixed;
+    inset: 0;
+    z-index: 1000;
+    background: rgba(0,0,0,.85);
+    backdrop-filter: blur(8px);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 40px;
+}
+
+.sim-overlay-content {
+    position: relative;
+    max-width: 700px;
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+}
+.sim-overlay-content img {
+    max-width: 100%;
+    max-height: 70vh;
+    border-radius: 12px;
+    border: 2px solid var(--border);
+    object-fit: contain;
+}
+
+.sim-overlay-close {
+    position: absolute;
+    top: -12px;
+    right: -12px;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: var(--bg-panel);
+    border: 1px solid var(--border);
+    color: var(--text);
+    font-size: 16px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all .2s;
+    z-index: 1001;
+}
+.sim-overlay-close:hover {
+    background: var(--red);
+    border-color: var(--red);
+}
+
+.sim-overlay-info {
+    font-size: 13px;
+    color: var(--text-muted);
+    text-align: center;
+    background: var(--bg-panel);
+    padding: 10px 20px;
+    border-radius: 8px;
+    border: 1px solid var(--border);
+}
+
+/* Color utility classes */
+.text-green { color: var(--green); }
+.text-red { color: var(--red); }
+.text-muted { color: var(--text-dim); }
