@@ -153,12 +153,49 @@ const Similarity = (() => {
         carousel.innerHTML = "";
         const similar = result.similar || [];
 
-        if (similar.length === 0) {
+        if (similar.length === 0 && !result.gradcam_overlay) {
             emptyState.style.display = "flex";
             emptyState.querySelector("p").textContent = "Aucune image similaire trouvée.";
             return;
         }
 
+        // --- Grad-CAM card (first card, before similar images) ---
+        let animIndex = 0;
+        if (result.gradcam_overlay) {
+            const gcCard = document.createElement("div");
+            gcCard.className = "sim-card gradcam-card";
+            const isOk = result.label === "ok";
+            gcCard.innerHTML = `
+                <div class="sim-card-rank gradcam-badge">🔍 Zones de décision</div>
+                <div class="sim-card-img-wrapper">
+                    <img class="sim-card-img" src="data:image/png;base64,${result.gradcam_overlay}" alt="Grad-CAM heatmap" />
+                </div>
+                <div class="sim-card-info">
+                    <span class="sim-card-label ${isOk ? "ok" : "def"}">${isOk ? "OK ✅" : "DEF ❌"}</span>
+                    <span class="sim-card-distance">Grad-CAM</span>
+                </div>
+                <div class="sim-card-path">${result.filename || "Image analysée"}</div>
+            `;
+            gcCard.addEventListener("click", () => {
+                overlayImage.src = `data:image/png;base64,${result.gradcam_overlay}`;
+                overlayInfo.innerHTML = `
+                    <strong>🔍 Zones de décision</strong> —
+                    <span class="${isOk ? 'text-green' : 'text-red'}">${isOk ? 'Conforme ✅' : 'Défectueuse ❌'}</span> —
+                    Grad-CAM (Heatmap superposée sur l'image)
+                `;
+                imageOverlay.style.display = "flex";
+                gsap.fromTo(imageOverlay, { opacity: 0 }, { opacity: 1, duration: 0.2 });
+                gsap.fromTo(".sim-overlay-content", { scale: 0.85 }, { scale: 1, duration: 0.3, ease: "back.out(1.4)" });
+            });
+            carousel.appendChild(gcCard);
+            gsap.fromTo(gcCard,
+                { opacity: 0, y: 30, scale: 0.9 },
+                { opacity: 1, y: 0, scale: 1, duration: 0.4, delay: 0, ease: "back.out(1.2)" }
+            );
+            animIndex = 1;
+        }
+
+        // --- Similar image cards ---
         similar.forEach((item, i) => {
             const card = document.createElement("div");
             card.className = "sim-card";
@@ -181,7 +218,7 @@ const Similarity = (() => {
 
             gsap.fromTo(card,
                 { opacity: 0, y: 30, scale: 0.9 },
-                { opacity: 1, y: 0, scale: 1, duration: 0.4, delay: i * 0.08, ease: "back.out(1.2)" }
+                { opacity: 1, y: 0, scale: 1, duration: 0.4, delay: (i + animIndex) * 0.08, ease: "back.out(1.2)" }
             );
         });
 

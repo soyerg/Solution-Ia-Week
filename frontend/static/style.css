@@ -1117,6 +1117,22 @@ body {
     border: 1px solid var(--border);
 }
 
+/* --- Grad-CAM card --- */
+.gradcam-card {
+    border-color: #f59e0b;
+    box-shadow: 0 0 12px rgba(245, 158, 11, .2);
+}
+.gradcam-card:hover {
+    border-color: #f59e0b;
+    box-shadow: 0 0 20px rgba(245, 158, 11, .35);
+}
+.gradcam-badge {
+    background: rgba(245, 158, 11, .12) !important;
+    color: #f59e0b !important;
+    font-size: 11px !important;
+    letter-spacing: .3px;
+}
+
 /* Color utility classes */
 .text-green { color: var(--green); }
 .text-red { color: var(--red); }

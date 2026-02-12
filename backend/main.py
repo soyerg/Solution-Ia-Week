@@ -20,6 +20,7 @@ from scipy.spatial.distance import cdist
 from torchvision import transforms
 
 from feature_extractor import FeatureExtractor
+from gradcam import ResNet50Classifier, generate_gradcam_overlay
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -28,6 +29,7 @@ MODEL_DIR = Path("/models")
 SVM_MODEL_PATH = MODEL_DIR / "svm_model.joblib"
 SCALER_PATH = MODEL_DIR / "scaler.joblib"
 RESNET_WEIGHTS_PATH = MODEL_DIR / "resnet50_extractor.pth"
+CLASSIFIER_WEIGHTS_PATH = MODEL_DIR / "resnet50_classifier.pth"
 FEATURES_NPZ_PATH = MODEL_DIR / "features_dataset.npz"
 SIMILARITY_CONFIG_PATH = MODEL_DIR / "similarity_config.json"
 CASTING_DATA_DIR = Path("/casting_data")
@@ -47,6 +49,9 @@ logger = logging.getLogger("backend")
 extractor: FeatureExtractor | None = None
 svm_model = None
 scaler = None
+
+# Grad-CAM classifier model
+classifier_model: ResNet50Classifier | None = None
 
 # Similarity search data (loaded from ia_training output)
 dataset_features: np.ndarray | None = None
@@ -71,7 +76,7 @@ test_transform = transforms.Compose([
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     """Load models into memory at startup."""
-    global extractor, svm_model, scaler, dataset_features, dataset_paths, dataset_labels, similarity_config
+    global extractor, svm_model, scaler, classifier_model, dataset_features, dataset_paths, dataset_labels, similarity_config
 
     logger.info("=" * 60)
     logger.info("LOADING MODELS")
@@ -134,6 +139,26 @@ async def lifespan(app: FastAPI):
         similarity_config = {"type": "single", "metric": "cosine"}
         logger.warning(
             "  ⚠️  Similarity config not found, defaulting to cosine distance"
+        )
+
+    # 6. Grad-CAM classifier model (for heatmap overlays)
+    if CLASSIFIER_WEIGHTS_PATH.exists():
+        t0 = time.time()
+        classifier_model = ResNet50Classifier(
+            num_classes=2,
+            weights_path=str(CLASSIFIER_WEIGHTS_PATH),
+        )
+        classifier_model = classifier_model.to(DEVICE)
+        classifier_model.eval()
+        logger.info(
+            f"  Grad-CAM classifier loaded from {CLASSIFIER_WEIGHTS_PATH} "
+            f"on {DEVICE} in {time.time() - t0:.2f}s"
+        )
+    else:
+        classifier_model = None
+        logger.warning(
+            f"  ⚠️  Classifier model not found: {CLASSIFIER_WEIGHTS_PATH}. "
+            "Grad-CAM heatmaps will be unavailable."
         )
 
     logger.info("=" * 60)
@@ -335,11 +360,19 @@ async def find_similar(file: UploadFile = File(...)):
                 "image_url": f"/api/images/{dataset_paths[idx]}",
             })
 
+        # 6. Generate Grad-CAM overlay (if classifier model is loaded)
+        gradcam_overlay = None
+        if classifier_model is not None:
+            gradcam_overlay = generate_gradcam_overlay(
+                image_bytes, classifier_model, test_transform, DEVICE
+            )
+
         inference_time = (time.time() - t_start) * 1000
 
         logger.info(
             f"Similar search '{file.filename}' → {label} "
-            f"(conf: {confidence:.2f}, {inference_time:.0f}ms)"
+            f"(conf: {confidence:.2f}, {inference_time:.0f}ms, "
+            f"gradcam={'yes' if gradcam_overlay else 'no'})"
         )
 
         return JSONResponse({
@@ -349,6 +382,7 @@ async def find_similar(file: UploadFile = File(...)):
             "filename": file.filename,
             "metric": (similarity_config or {}).get("name", "cosine"),
             "similar": similar,
+            "gradcam_overlay": gradcam_overlay,
         })
 
     except Exception as e:
