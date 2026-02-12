@@ -2,9 +2,9 @@
 
 ## Vue d'ensemble
 
-Le projet est une application web conteneurisée (Docker) à **deux services** qui classifie des images de pièces de fonderie en **conforme (OK)** ou **défectueuse (DEF)** grâce à un pipeline de Machine Learning combinant un réseau de neurones profond (ResNet50) et un SVM. L'application permet également de **rechercher les 5 images les plus similaires** dans le dataset pour chaque pièce analysée.
+Le projet est une application web conteneurisée (Docker) à **deux services** qui classifie des images de pièces de fonderie en **conforme (OK)** ou **défectueuse (DEF)** grâce à un pipeline de Machine Learning combinant un réseau de neurones profond (ResNet50) et un SVM. L'application permet également de **rechercher les 5 images les plus similaires** dans le dataset pour chaque pièce analysée, et de générer une **heatmap Grad-CAM** pour visualiser les zones de décision du modèle.
 
-L'interface est une **Single Page Application (SPA)** avec deux vues (Convoyeur et Similarité) partageant un **historique commun** des images analysées. Un **notebook Jupyter** (`ia_training.ipynb`) est fourni pour encoder le dataset et benchmarker les métriques de distance.
+L'interface est une **Single Page Application (SPA)** avec deux vues (Convoyeur et Similarité) partageant un **historique commun** des images analysées. Deux **notebooks Jupyter** sont fournis : `ia_classification.ipynb` pour l'entraînement du classificateur et la génération des heatmaps Grad-CAM, et `ia_training.ipynb` pour encoder le dataset et benchmarker les métriques de distance.
 
 ---
 
@@ -30,12 +30,19 @@ L'interface est une **Single Page Application (SPA)** avec deux vues (Convoyeur 
 │  │  │  /api/* → backend  │  │     │  │  (scaler.joblib)       │  │  │
 │  │  └────────────────────┘  │     │  └──────────┬─────────────┘  │  │
 │  │                          │     │             │                │  │
-│  └──────────────────────────┘     │  ┌──────────▼─────────────┐  │  │
-│                                   │  │  SVM Classifier        │  │  │
-│                                   │  │  (svm_model.joblib)    │  │  │
-│                                   │  └────────────────────────┘  │  │
+│  └──────────────────────────┘     │  ┌──────────▼───────────┘  │  │
+│                                   │  │  SVM Classifier        │  │
+│                                   │  │  (svm_model.joblib)    │  │
+│                                   │  └────────────────────────┘  │
+│                                   │                              │
+│                                   │  ┌────────────────────────┘  │
+│                                   │  │  Grad-CAM (PyTorch)    │  │
+│                                   │  │  ResNet50Classifier    │  │
+│                                   │  │  (resnet50_classifier  │  │
+│                                   │  │   .pth) → heatmap     │  │
+│                                   │  └────────────────────────┘  │
 │                                   └──────────────────────────────┘  │
-└─────────────────────────────────────────────────────────────────────┘
+└───────────────────────────────────────────────────────────────────┘
          │
          │ Port 80 (hôte) → 3000 (conteneur)
          ▼
@@ -80,11 +87,12 @@ L'interface est une **Single Page Application (SPA)** avec deux vues (Convoyeur 
 | **Image Docker**| `python:3.12-slim`                         |
 
 **Responsabilités :**
-- Charger les modèles au démarrage (ResNet50, SVM, Scaler, dataset de features)
+- Charger les modèles au démarrage (ResNet50 extractor, SVM, Scaler, dataset de features, ResNet50 classifier pour Grad-CAM)
 - Extraire les features des images avec ResNet50
 - Classifier les images avec le SVM
 - Retourner le résultat (label, confiance, temps d'inférence)
 - Rechercher les 5 images les plus similaires dans le dataset encodé
+- Générer une **heatmap Grad-CAM** (overlay 50% image + 50% heatmap Jet) pour visualiser les zones de décision
 - Servir les images du dossier `casting_data/` via un endpoint dédié
 
 **Dépendances Python :**
@@ -180,6 +188,22 @@ La classe `FeatureExtractor` (`backend/feature_extractor.py`) supporte 4 backbon
 
 ---
 
+## Grad-CAM — Heatmap de décision
+
+La classe `ResNet50Classifier` (`backend/gradcam.py`) est un ResNet50 fine-tuné avec une tête de classification, utilisé pour générer les **heatmaps Grad-CAM** :
+
+| Composant               | Détails                                          |
+|-------------------------|--------------------------------------------------|
+| **Modèle**              | ResNet50 + tête classif (2048 → 256 → 2)         |
+| **Poids**               | `resnet50_classifier.pth` (généré par `ia_classification.ipynb`) |
+| **Couche cible**        | `layer4` (activations 2048 × 7 × 7)              |
+| **Colormap**            | Jet (bleu → cyan → vert → jaune → rouge)       |
+| **Overlay**             | 50% image originale + 50% heatmap colorée         |
+| **Transport**           | PNG encodé en base64 dans la réponse `/api/similar` |
+| **Fallback**            | Si `resnet50_classifier.pth` absent, `gradcam_overlay: null` |
+
+---
+
 ## Endpoints API
 
 ### Backend (port 8000, interne)
@@ -188,7 +212,7 @@ La classe `FeatureExtractor` (`backend/feature_extractor.py`) supporte 4 backbon
 |---------|--------------------|------------------------------------------------|
 | `GET`   | `/api/health`      | État du serveur (device, modèles)              |
 | `POST`  | `/api/classify`    | Classifier une image (multipart/form)          |
-| `POST`  | `/api/similar`     | Classification + top 5 images similaires       |
+| `POST`  | `/api/similar`     | Classification + top 5 similaires + heatmap Grad-CAM |
 | `GET`   | `/api/images/{p}`  | Servir une image du dataset `casting_data/`    |
 
 ### Frontend (port 3000 → 80)
@@ -209,7 +233,7 @@ La classe `FeatureExtractor` (`backend/feature_extractor.py`) supporte 4 backbon
 volumes:
   - ./frontend:/app       # Code source frontend (live reload)
   - ./backend:/app        # Code source backend (live reload)
-  - ./models:/models      # Modèles ML (resnet50_extractor.pth, svm_model.joblib, scaler.joblib, features_dataset.npz)
+  - ./models:/models      # Modèles ML (resnet50_extractor.pth, resnet50_classifier.pth, svm_model.joblib, scaler.joblib, features_dataset.npz)
   - ./casting_data:/casting_data  # Dataset d'images (servi via /api/images)
 ```
 
@@ -285,10 +309,15 @@ Navigateur                    Frontend (3000)              Backend (8000)
     │                              │     + Similarity search    │
     │                              │     (distance metric on    │
     │                              │      features_dataset.npz) │
+    │                              │     + Grad-CAM heatmap     │
+    │                              │     (ResNet50Classifier    │
+    │                              │      → overlay base64)    │
     │                              │                            │
-    │                              │  12. JSON {label, similar} │
+    │                              │  12. JSON {label, similar, │
+    │                              │       gradcam_overlay}     │
     │                              │◀───────────────────────────│
-    │  13. Carousel top 5          │                            │
+    │  13. Carte Grad-CAM          │                            │
+    │      + Carousel top 5        │                            │
     │◀─────────────────────────    │                            │
     │  14. GET /api/images/* (×5)  │                            │
     │                        ──────│───────────────────────────▶│

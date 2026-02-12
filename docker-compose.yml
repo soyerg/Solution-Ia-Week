@@ -33,17 +33,42 @@ services:
       - ./backend:/app           # Live reload: edit code on host
       - ./models:/models         # Model files (svm_model.joblib, scaler.joblib)
       - ./casting_data:/casting_data  # Dataset images (served via /api/images)
+    depends_on:
+      - ollama
     networks:
       - casting-net
     restart: unless-stopped
-    # GPU support — uncomment the block below when NVIDIA drivers are installed
-    # deploy:
-    #   resources:
-    #     reservations:
-    #       devices:
-    #         - driver: nvidia
-    #           count: 1
-    #           capabilities: [gpu]
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+  # ==========================================================
+  # OLLAMA — LLaVA Vision LLM for defect description (GPU)
+  # Internal only (port 11434, NOT exposed)
+  # ==========================================================
+  ollama:
+    image: ollama/ollama:latest
+    container_name: casting-ollama
+    volumes:
+      - ollama_data:/root/.ollama    # Persist downloaded models
+    networks:
+      - casting-net
+    restart: unless-stopped
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: 1
+              capabilities: [gpu]
+
+volumes:
+  ollama_data:
+    driver: local
 
 networks:
   casting-net:

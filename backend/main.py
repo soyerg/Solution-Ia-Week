@@ -21,6 +21,7 @@ from torchvision import transforms
 
 from feature_extractor import FeatureExtractor
 from gradcam import ResNet50Classifier, generate_gradcam_overlay
+from vllm_analyzer import analyze_defect, check_ollama_ready
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -184,12 +185,14 @@ app = FastAPI(
 @app.get("/api/health")
 async def health():
     """Health check endpoint."""
+    ollama_ok = await check_ollama_ready()
     return {
         "status": "ok",
         "device": str(DEVICE),
         "cuda_available": torch.cuda.is_available(),
         "svm_loaded": svm_model is not None,
         "scaler_loaded": scaler is not None,
+        "ollama_ready": ollama_ok,
     }
 
 
@@ -367,6 +370,16 @@ async def find_similar(file: UploadFile = File(...)):
                 image_bytes, classifier_model, test_transform, DEVICE
             )
 
+        # 7. VLLM defect diagnosis (only if piece is defective)
+        vllm_diagnosis = None
+        if label == "def":
+            vllm_diagnosis = await analyze_defect(image_bytes)
+            if vllm_diagnosis:
+                logger.info(
+                    f"VLLM diagnosis: {vllm_diagnosis['category']} — "
+                    f"{vllm_diagnosis['description']}"
+                )
+
         inference_time = (time.time() - t_start) * 1000
 
         logger.info(
@@ -383,6 +396,7 @@ async def find_similar(file: UploadFile = File(...)):
             "metric": (similarity_config or {}).get("name", "cosine"),
             "similar": similar,
             "gradcam_overlay": gradcam_overlay,
+            "vllm_diagnosis": vllm_diagnosis,
         })
 
     except Exception as e:

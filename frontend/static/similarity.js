@@ -33,6 +33,9 @@ const Similarity = (() => {
     const overlayInfo     = document.getElementById("overlayInfo");
     const overlayClose    = document.getElementById("overlayClose");
     const btnSearch       = document.getElementById("btnSearchSimilar");
+    const vllmDiagnosis   = document.getElementById("vllmDiagnosis");
+    const vllmCategory    = document.getElementById("vllmCategory");
+    const vllmDescription = document.getElementById("vllmDescription");
 
     // -----------------------------------------------------------------------
     // Load from history (called by nav.js via AppHistory.onSelect)
@@ -77,6 +80,7 @@ const Similarity = (() => {
                 "Sélectionnez une image depuis l'historique puis lancez la recherche";
         metricInfo.style.display = "none";
         loadingState.style.display = "none";
+        vllmDiagnosis.style.display = "none";
     }
 
     // -----------------------------------------------------------------------
@@ -223,6 +227,28 @@ const Similarity = (() => {
         });
 
         carouselWrapper.style.display = "flex";
+
+        // --- VLLM Diagnosis (only if piece is DEF and diagnosis available) ---
+        showVllmDiagnosis(result);
+    }
+
+    // -----------------------------------------------------------------------
+    // VLLM Diagnosis display
+    // -----------------------------------------------------------------------
+    function showVllmDiagnosis(result) {
+        if (result.vllm_diagnosis && result.label === "def") {
+            const diag = result.vllm_diagnosis;
+            vllmCategory.textContent = diag.category;
+            vllmDescription.textContent = diag.description;
+            vllmDiagnosis.style.display = "flex";
+
+            gsap.fromTo(vllmDiagnosis,
+                { opacity: 0, y: 15 },
+                { opacity: 1, y: 0, duration: 0.4, delay: 0.3, ease: "power2.out" }
+            );
+        } else {
+            vllmDiagnosis.style.display = "none";
+        }
     }
 
     // -----------------------------------------------------------------------

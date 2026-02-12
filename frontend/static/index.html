@@ -204,6 +204,18 @@
                     <button class="sim-carousel-btn sim-carousel-next" id="btnNext">❯</button>
                 </div>
 
+                <!-- VLLM Defect Diagnosis (only visible when DEF) -->
+                <div class="vllm-diagnosis" id="vllmDiagnosis" style="display:none;">
+                    <div class="vllm-diagnosis-header">
+                        <span class="vllm-diagnosis-icon">⚠️</span>
+                        <span class="vllm-diagnosis-title">Diagnostic IA</span>
+                    </div>
+                    <div class="vllm-diagnosis-body">
+                        <span class="vllm-category" id="vllmCategory"></span>
+                        <span class="vllm-description" id="vllmDescription"></span>
+                    </div>
+                </div>
+
                 <!-- Enlarged image overlay -->
                 <div class="sim-overlay" id="imageOverlay" style="display:none;">
                     <div class="sim-overlay-content">

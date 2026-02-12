@@ -43,6 +43,7 @@ Ce projet a été développé dans le cadre de l'**IA Week**. Il s'agit d'une ap
 - 🔍 **Classification automatique** — Détection de défauts sur pièces de fonderie
 - 🏭 **Convoyeur animé** — Interface industrielle avec animation GSAP du tri des pièces
 - 🔍 **Recherche de similarité** — Trouve les 5 images les plus proches dans le dataset pour chaque pièce analysée
+- � **Grad-CAM (heatmap)** — Visualisation des zones de décision du modèle superposée sur l'image analysée, affichée en première carte du carousel
 - 📊 **Statistiques en temps réel** — Taux de conformité, compteurs, historique
 - 🖱️ **Drag & Drop** — Glissez-déposez vos images pour les analyser
 - 📋 **File d'attente** — Traitement séquentiel avec suivi visuel
@@ -52,7 +53,7 @@ Ce projet a été développé dans le cadre de l'**IA Week**. Il s'agit d'une ap
 - 🔒 **Authentification** — Page de connexion sécurisée
 - 🐳 **Dockerisé** — Déploiement en un seul commande
 - ♻️ **Live Reload** — Modification du code sans rebuild en développement
-- 📓 **Notebook d'entraînement** — Encodage du dataset et benchmark des métriques de distance
+- 📓 **Notebooks d'entraînement** — Classification fine-tuning ResNet50 + Grad-CAM (`ia_classification.ipynb`) et encodage dataset + benchmark distances (`ia_training.ipynb`)
 
 ---
 
@@ -116,13 +117,14 @@ Assurez-vous que les fichiers de modèles sont présents dans le dossier `models
 ```
 models/
 ├── resnet50_extractor.pth    # Poids ResNet50 (extraction de features)
+├── resnet50_classifier.pth   # ResNet50 + tête de classification (Grad-CAM)
 ├── svm_model.joblib          # Modèle SVM entraîné
 ├── scaler.joblib             # StandardScaler (normalisation des features)
 ├── features_dataset.npz      # Vecteurs de features du dataset (généré par ia_training)
 └── similarity_config.json    # Configuration de la métrique de distance (généré par ia_training)
 ```
 
-> ⚠️ Les 3 premiers fichiers sont générés lors de l'entraînement initial.
+> ⚠️ Les 4 premiers fichiers sont générés lors de l'entraînement initial (`ia_classification.ipynb`).
 > Les 2 derniers sont générés par le notebook `ia_training.ipynb` (voir section suivante).
 
 ### 3. Générer le dataset de similarité (optionnel mais requis pour `/similarity.html`)
@@ -191,9 +193,10 @@ docker compose down
 2. **Cliquez** sur une image dans la **sidebar d'historique** (à droite)
 3. La vue **Similarité** s'ouvre avec l'image pré-chargée et son résultat de classification
 4. **Cliquez** sur **« 🔍 Rechercher les similaires »** pour lancer la recherche
-5. **Parcourez** le carousel des 5 images les plus similaires du dataset
-6. **Cliquez** sur une image du carousel pour l'agrandir
-7. **Revenez** au convoyeur via le bouton **🏭 Convoyeur** — tout l'état est conservé
+5. **Observez** la première carte du carousel : la **heatmap Grad-CAM** (zones de décision du modèle superposées sur votre image)
+6. **Parcourez** le carousel des 5 images les plus similaires du dataset (après la carte Grad-CAM)
+7. **Cliquez** sur une image du carousel pour l'agrandir
+8. **Revenez** au convoyeur via le bouton **🏭 Convoyeur** — tout l'état est conservé
 
 ### Formats d'images supportés
 
@@ -215,6 +218,7 @@ Solution Ia Week/
 │   ├── Dockerfile              # Image Docker du backend
 │   ├── main.py                 # API FastAPI (endpoints /api/*)
 │   ├── feature_extractor.py    # Classe ResNet50 feature extractor
+│   ├── gradcam.py              # Grad-CAM : heatmaps de décision (ResNet50Classifier)
 │   └── requirements.txt        # Dépendances Python backend
 │
 ├── frontend/                   # Service web (UI + proxy)
@@ -233,6 +237,7 @@ Solution Ia Week/
 │
 ├── models/                     # Modèles ML sérialisés
 │   ├── resnet50_extractor.pth  # Poids ResNet50 (extraction features)
+│   ├── resnet50_classifier.pth # ResNet50 + tête classif (Grad-CAM)
 │   ├── svm_model.joblib        # SVM entraîné (classification)
 │   ├── scaler.joblib           # StandardScaler (normalisation)
 │   ├── features_dataset.npz   # Vecteurs de features du dataset
@@ -246,6 +251,7 @@ Solution Ia Week/
 │       ├── def_front/          # Images défectueuses (test)
 │       └── ok_front/           # Images conformes (test)
 │
+├── ia_classification.ipynb     # Notebook : fine-tuning ResNet50 + Grad-CAM
 ├── ia_training.ipynb           # Notebook : encodage dataset + benchmark distances
 │
 └── exemple_dimage/             # Images d'exemple pour tester
@@ -316,7 +322,8 @@ curl -X POST http://localhost/api/similar \
       "distance": 0.0523,
       "image_url": "/api/images/test/def_front/cast_def_0_100.jpeg"
     }
-  ]
+  ],
+  "gradcam_overlay": "iVBORw0KGgo..." 
 }
 ```
 
@@ -338,6 +345,7 @@ Retourne l'image depuis le dossier `casting_data/`. Protégé contre le path tra
 | `filename`          | Nom du fichier envoyé                          |
 | `metric`            | Métrique de distance utilisée (sur `/api/similar`) |
 | `similar`           | Top 5 images les plus proches (sur `/api/similar`) |
+| `gradcam_overlay`   | Image PNG base64 de la heatmap Grad-CAM superposée (sur `/api/similar`, `null` si modèle absent) |
 
 ---
 
@@ -360,6 +368,32 @@ Image → Preprocessing → ResNet50 (features 2048-dim) → Scaler → SVM → 
 - **ResNet50** est excellent pour extraire des features visuelles de haut niveau (textures, formes, motifs)
 - **SVM** est efficace pour la classification binaire sur des features de haute dimension
 - Cette approche est plus **légère à entraîner** qu'un fine-tuning complet du réseau
+
+### Grad-CAM (Gradient-weighted Class Activation Mapping)
+
+Lors de la recherche de similarité, une **heatmap Grad-CAM** est générée pour visualiser les **zones de décision** du modèle :
+
+```
+Image → ResNet50Classifier (forward) → Classe prédite
+                    │
+            Backward sur la classe cible
+                    │
+         Gradients de layer4 (2048 × 7 × 7)
+                    │
+         GAP des gradients → poids par canal
+                    │
+         Σ pondérée des activations + ReLU
+                    │
+         Upsample bilinéaire → 224 × 224
+                    │
+         Overlay = 50% image + 50% heatmap (Jet)
+                    │
+         → Image PNG encodée en base64
+```
+
+- Les **zones rouges** indiquent les régions les plus importantes pour la décision du modèle
+- Les **zones bleues** sont les régions peu influentes
+- Le modèle utilisé est `resnet50_classifier.pth` (ResNet50 fine-tuné avec tête de classification, généré par `ia_classification.ipynb`)
 
 ---
 
